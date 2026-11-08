@@ -101,9 +101,20 @@ public static class DashboardEndpoints
         {
             var inc = await db.Incidents.FirstOrDefaultAsync(i => i.Id == id, ct);
             if (inc is null) return Results.NotFound();
-            var findings = await db.Findings.Where(f => f.IncidentId == id).ToListAsync(ct);
-            var actions = await db.Actions.Where(a => a.IncidentId == id).ToListAsync(ct);
-            return Results.Ok(new { incident = ToListItem(inc), inc.Summary, findings, actions });
+            var findings = await db.Findings.Where(f => f.IncidentId == id).OrderBy(f => f.FirstSeen).ToListAsync(ct);
+            var actions = await db.Actions.Where(a => a.IncidentId == id).OrderBy(a => a.CreatedAt).ToListAsync(ct);
+
+            // Related timeline events: events matching server/tenant and time window around incident
+            var since = inc.OpenedAt.AddMinutes(-30);
+            var until = (inc.ResolvedAt ?? DateTimeOffset.UtcNow).AddMinutes(15);
+            var events = await db.Events
+                .Where(e => e.ServerId == inc.ServerId && e.Ts >= since && e.Ts <= until)
+                .OrderByDescending(e => e.Ts)
+                .Take(50)
+                .Select(e => new { e.Id, e.Ts, e.Module, e.Type, e.Severity, e.SourceIp, e.Attrs })
+                .ToListAsync(ct);
+
+            return Results.Ok(new { incident = ToListItem(inc), inc.Summary, findings, actions, events });
         });
 
         g.MapPost("/actions/{id:guid}/approve", async (Guid id, KellaDbContext db, HttpContext http, CommandSigner signer, CancellationToken ct) =>

@@ -13,11 +13,13 @@ public sealed class MailOutboundSpikeRule : IRule
 {
     private readonly SlidingWindowCounter _counter;
     private readonly int _minSpikeCount;
+    private readonly IBaselineProvider? _baselines;
 
-    public MailOutboundSpikeRule(TimeSpan? window = null, int minSpikeCount = 100)
+    public MailOutboundSpikeRule(TimeSpan? window = null, int minSpikeCount = 100, IBaselineProvider? baselines = null)
     {
         _counter = new SlidingWindowCounter(window ?? TimeSpan.FromMinutes(10));
         _minSpikeCount = minSpikeCount;
+        _baselines = baselines;
     }
 
     public string Code => "mail.outbound_spike";
@@ -31,7 +33,24 @@ public sealed class MailOutboundSpikeRule : IRule
         var key = $"{evt.ServerId}:{sender.ToLowerInvariant()}";
         var count = _counter.Add(key, evt.Ts);
 
-        if (count < _minSpikeCount)
+        // Check against baselines if 24h data exist (SPEC §9)
+        // hour of week: (dayOfWeek * 24 + hour) UTC
+        int hourOfWeek = ((int)evt.Ts.DayOfWeek * 24) + evt.Ts.Hour;
+        var p95 = _baselines?.GetP95(evt.OrganizationId, "mailbox", evt.ServerId, hourOfWeek);
+
+        bool isSpike;
+        if (p95.HasValue && p95.Value > 0)
+        {
+            // SPEC §9: > 20x and > 100 msgs vs its own p95
+            isSpike = count > _minSpikeCount && count > (p95.Value * 20);
+        }
+        else
+        {
+            // Fixed threshold before 24h of data exist
+            isSpike = count >= _minSpikeCount;
+        }
+
+        if (!isSpike)
             return null;
 
         _counter.Reset(key);
@@ -42,6 +61,7 @@ public sealed class MailOutboundSpikeRule : IRule
             ["queuedCount"] = count.ToString(),
             ["windowMinutes"] = "10",
         };
+        if (p95.HasValue) evidence["baselineP95"] = p95.Value.ToString("F1");
 
         return new RuleMatch(
             Code,

@@ -44,6 +44,18 @@ export interface KellaAction {
   mode: 'Auto' | 'Approval'
   status: string
   label: string | null
+  createdAt?: string
+  executedAt?: string | null
+}
+
+export interface IncidentEvent {
+  id: string
+  ts: string
+  module: string
+  type: string
+  severity: Severity
+  sourceIp: string | null
+  attrs: Record<string, string>
 }
 
 export interface IncidentDetail {
@@ -51,6 +63,7 @@ export interface IncidentDetail {
   summary: string
   findings: { id: string; ruleCode: string; title: string; evidence: Record<string, string>; firstSeen: string }[]
   actions: KellaAction[]
+  events?: IncidentEvent[]
 }
 
 export interface AuthUser {

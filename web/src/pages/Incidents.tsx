@@ -95,29 +95,78 @@ export function IncidentDetail() {
       )}
 
       <div className="row">
-        {/* Timeline / Findings */}
+        {/* Timeline (Events, Findings, and Actions) */}
         <section className="panel" style={{ flex: 1.5, minWidth: 320 }}>
-          <h2 style={{ marginBottom: 12 }}>Incident Timeline & Findings</h2>
-          {data.findings.length === 0 && <div className="cap">No findings recorded.</div>}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {data.findings.map((f) => (
-              <div key={f.id} style={{ borderLeft: '2px solid var(--line)', paddingLeft: 12, paddingBottom: 4 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <b style={{ fontWeight: 500 }}>{f.title}</b>
-                  <span className="cap">{timeAgo(f.firstSeen)}</span>
-                </div>
-                <div className="cap" style={{ marginTop: 2 }}>{f.ruleCode}</div>
-                {Object.keys(f.evidence || {}).length > 0 && (
-                  <div style={{ marginTop: 6, fontSize: '0.85rem', color: 'var(--muted)' }}>
-                    {Object.entries(f.evidence).map(([k, v]) => (
-                      <span key={k} style={{ marginRight: 12 }}>
-                        <code>{k}</code>: {v}
-                      </span>
-                    ))}
+          <h2 style={{ marginBottom: 12 }}>Incident Timeline</h2>
+          {data.findings.length === 0 && (!data.events || data.events.length === 0) && (
+            <div className="cap">No events recorded.</div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Merged chronological timeline items */}
+            {(() => {
+              type TimelineItem = {
+                id: string
+                ts: string
+                badge: string
+                badgeClass: string
+                title: string
+                detail: string
+              }
+
+              const items: TimelineItem[] = []
+
+              data.findings.forEach((f) => {
+                items.push({
+                  id: `f-${f.id}`,
+                  ts: f.firstSeen,
+                  badge: 'Finding',
+                  badgeClass: 'crit',
+                  title: f.title,
+                  detail: `${f.ruleCode} · ${Object.entries(f.evidence || {}).map(([k, v]) => `${k}=${v}`).join(', ')}`,
+                })
+              })
+
+              data.actions.forEach((a) => {
+                items.push({
+                  id: `a-${a.id}`,
+                  ts: a.executedAt ?? a.createdAt ?? data.incident.openedAt,
+                  badge: a.mode === 'Auto' ? 'Auto Action' : 'Action',
+                  badgeClass: a.status === 'Succeeded' ? 'ok' : a.status === 'PendingApproval' ? 'warn' : 'info',
+                  title: `${a.label ?? a.kind} (${a.status})`,
+                  detail: a.params ? JSON.stringify(a.params) : '',
+                })
+              })
+
+              data.events?.slice(0, 15).forEach((e) => {
+                items.push({
+                  id: `e-${e.id}`,
+                  ts: e.ts,
+                  badge: e.type,
+                  badgeClass: '',
+                  title: `${e.module}.${e.type}`,
+                  detail: `${e.sourceIp ? `IP: ${e.sourceIp} ` : ''}${Object.entries(e.attrs || {}).map(([k, v]) => `${k}=${v}`).join(', ')}`,
+                })
+              })
+
+              items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+
+              return items.map((it) => (
+                <div key={it.id} style={{ borderLeft: '2px solid var(--line)', paddingLeft: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className={`pill ${it.badgeClass}`} style={{ fontSize: '0.75rem', padding: '2px 8px' }}>{it.badge}</span>
+                      <b style={{ fontWeight: 500 }}>{it.title}</b>
+                    </div>
+                    <span className="cap">{timeAgo(it.ts)}</span>
                   </div>
-                )}
-              </div>
-            ))}
+                  {it.detail && (
+                    <div className="cap" style={{ marginTop: 4, fontFamily: 'var(--mono)' }}>
+                      {it.detail}
+                    </div>
+                  )}
+                </div>
+              ))
+            })()}
           </div>
         </section>
 

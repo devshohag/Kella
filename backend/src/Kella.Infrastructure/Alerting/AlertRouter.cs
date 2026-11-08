@@ -21,8 +21,8 @@ public sealed class AlertRouter(
         {
             [Severity.Info] = ["dashboard"],
             [Severity.Warning] = ["dashboard", "telegram"],
-            [Severity.Critical] = ["dashboard", "telegram"],
-            [Severity.Down] = ["dashboard", "telegram"],
+            [Severity.Critical] = ["dashboard", "email", "telegram", "whatsapp"],
+            [Severity.Down] = ["dashboard", "email", "telegram", "whatsapp", "voice"],
         };
 
     private readonly IAlertChannel[] _channels = channels.ToArray();

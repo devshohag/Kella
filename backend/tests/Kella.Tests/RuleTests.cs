@@ -1,3 +1,4 @@
+using Kella.Core;
 using Kella.Core.Actions;
 using Kella.Core.Domain;
 using Kella.Core.Events;
@@ -102,6 +103,55 @@ public class RuleTests
         Assert.Equal("mail.outbound_spike", match.RuleCode);
         Assert.Equal(Severity.Critical, match.Severity);
         Assert.Contains(match.Actions, a => a.Kind == ActionKinds.HoldSender && a.Mode == ActionMode.Auto);
+    }
+
+    [Fact]
+    public void Mail_outbound_spike_uses_baseline_p95_when_available()
+    {
+        var baselines = new InMemoryBaselineProvider();
+        var orgId = Guid.NewGuid();
+        var t0 = DateTimeOffset.Parse("2026-11-08T02:00:00Z");
+        int hourOfWeek = ((int)t0.DayOfWeek * 24) + t0.Hour;
+
+        // Baseline p95 is 10 messages/hour. 20x baseline = 200 messages needed!
+        baselines.SetBaseline(orgId, "mailbox", Server, hourOfWeek, 10.0);
+
+        var rule = new MailOutboundSpikeRule(minSpikeCount: 100, baselines: baselines);
+
+        // 105 messages is > 100, but <= 200 (20x p95), so it should NOT fire
+        RuleMatch? lastMatch = null;
+        for (var i = 0; i < 105; i++)
+        {
+            var evt = new KellaEvent
+            {
+                OrganizationId = orgId,
+                ServerId = Server,
+                Ts = t0.AddSeconds(i),
+                Module = Modules.Mail,
+                Type = EventTypes.MailMessageQueued,
+                Attrs = new() { ["sender"] = "highvolume@provider.com" }
+            };
+            lastMatch = rule.Evaluate(evt);
+        }
+        Assert.Null(lastMatch);
+
+        // Continue until > 200 (e.g. 201 messages total) -> now it MUST fire
+        for (var i = 105; i < 201; i++)
+        {
+            var evt = new KellaEvent
+            {
+                OrganizationId = orgId,
+                ServerId = Server,
+                Ts = t0.AddSeconds(i),
+                Module = Modules.Mail,
+                Type = EventTypes.MailMessageQueued,
+                Attrs = new() { ["sender"] = "highvolume@provider.com" }
+            };
+            lastMatch = rule.Evaluate(evt);
+        }
+
+        Assert.NotNull(lastMatch);
+        Assert.Equal("mail.outbound_spike", lastMatch!.RuleCode);
     }
 
     [Fact]
