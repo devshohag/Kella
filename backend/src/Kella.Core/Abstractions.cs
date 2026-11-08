@@ -38,7 +38,7 @@ public interface IRule
 
 public enum AlertChannelKind { Email, Telegram, WhatsApp, Voice }
 
-public sealed record AlertMessage(Guid IncidentId, Severity Severity, string Title, string Body, IReadOnlyList<string> ReplyOptions);
+public sealed record AlertMessage(Guid IncidentId, int IncidentNumber, Severity Severity, string Title, string Body, IReadOnlyList<string> ReplyOptions);
 
 public interface IAlertChannel
 {

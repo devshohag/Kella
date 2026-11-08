@@ -47,6 +47,7 @@ public sealed class AlertRouter(
 
         var message = new AlertMessage(
             incident.Id,
+            incident.Number,
             incident.Severity,
             incident.Title,
             BuildBody(incident, server),

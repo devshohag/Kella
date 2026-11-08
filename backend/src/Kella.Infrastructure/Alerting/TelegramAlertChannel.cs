@@ -61,7 +61,7 @@ public sealed class TelegramAlertChannel : IAlertChannel, IDisposable
             Severity.Warning => "🟠",
             _ => "ℹ️",
         };
-        var text = $"{icon} {message.Severity}: {message.Title}\n{message.Body}";
+        var text = $"{icon} {message.Severity}: INC-{message.IncidentNumber} - {message.Title}\n{message.Body}";
         if (message.ReplyOptions.Count > 0)
             text += "\n\n" + string.Join('\n', message.ReplyOptions.Select((r, i) => $"Reply {i + 1} to {r}"));
         return text.Trim();

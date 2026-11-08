@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Kella.Api;
+using Kella.Core;
 using Kella.Core.Domain;
 using Kella.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
@@ -72,6 +73,15 @@ public class WebhookSecurityTests(WebApplicationFactory<Program> factory) : ICla
         var client = prodFactory.CreateClient();
         var res = await client.PostAsJsonAsync("/api/hooks/telegram", new { });
         Assert.Equal(HttpStatusCode.ServiceUnavailable, res.StatusCode);
+    }
+
+    [Fact]
+    public void TelegramAlertChannel_Format_contains_incident_number_in_first_line()
+    {
+        var msg = new AlertMessage(Guid.NewGuid(), 4242, Severity.Critical, "Spike 2", "Body", []);
+        var formatted = Kella.Infrastructure.Alerting.TelegramAlertChannel.Format(msg);
+        var firstLine = formatted.Split('\n')[0];
+        Assert.Contains("INC-4242", firstLine);
     }
 
     [Fact]
@@ -157,7 +167,11 @@ public class WebhookSecurityTests(WebApplicationFactory<Program> factory) : ICla
             act2Id = act2.Id;
         }
 
-        // Send a webhook reply "1" replying to a message mentioning INC-2002
+        // Format alert using TelegramAlertChannel.Format per G2
+        var alertMessage = new AlertMessage(inc2Id, 2002, Severity.Critical, "Spike 2", "Spike 2 body", ["hold user2@bad.com"]);
+        var formattedAlert = Kella.Infrastructure.Alerting.TelegramAlertChannel.Format(alertMessage);
+
+        // Send a webhook reply "1" replying to the formatted alert message
         var payload = new
         {
             message = new
@@ -166,7 +180,7 @@ public class WebhookSecurityTests(WebApplicationFactory<Program> factory) : ICla
                 text = "1",
                 reply_to_message = new
                 {
-                    text = "🔴 Critical: Spike 2\nINC-2002 opened."
+                    text = formattedAlert
                 }
             }
         };
