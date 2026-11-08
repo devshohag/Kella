@@ -19,11 +19,30 @@ public static class WebhookEndpoints
     {
         var g = app.MapGroup("/api/hooks").WithTags("Webhooks");
 
-        g.MapPost("/telegram", async (HttpContext http, KellaDbContext db, OrgContext org, CommandSigner signer, IConfiguration config, CancellationToken ct) =>
+        g.MapPost("/telegram", async (
+            HttpContext http,
+            KellaDbContext db,
+            OrgContext org,
+            CommandSigner signer,
+            IConfiguration config,
+            IHostEnvironment env,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
         {
             // Verify X-Telegram-Bot-Api-Secret-Token with constant-time compare
             var expectedSecret = config["Kella:Telegram:WebhookSecretToken"];
-            if (!string.IsNullOrEmpty(expectedSecret))
+            var isDev = env.IsDevelopment() || env.IsEnvironment("Testing");
+
+            if (string.IsNullOrEmpty(expectedSecret))
+            {
+                if (!isDev)
+                {
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                }
+                var logger = loggerFactory.CreateLogger("Kella.Api.Webhooks");
+                logger.LogWarning("Kella:Telegram:WebhookSecretToken is not configured. Webhook is unauthenticated in development.");
+            }
+            else
             {
                 var headerSecret = http.Request.Headers["X-Telegram-Bot-Api-Secret-Token"].ToString();
                 if (string.IsNullOrEmpty(headerSecret) || !CryptographicOperations.FixedTimeEquals(

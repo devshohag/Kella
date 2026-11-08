@@ -41,6 +41,7 @@ services:
       Kella__Seed__OwnerEmail: owner@example.com
       Kella__Seed__OwnerPassword: kella-dev-password
       KELLA__COMMANDS__PRIVATEKEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" # dev-only 32-byte zero seed
+      Kella__Telegram__WebhookSecretToken: kella-dev-webhook-secret-token
       Kella__WebOrigins__0: http://localhost:8080
     ports: ["5080:5080"]
     depends_on:

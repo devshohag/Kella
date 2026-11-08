@@ -58,3 +58,14 @@ docs/      SPEC.md, design, decisions
 ## Status
 
 Phase 0 complete: EF Core migrations for every table in SPEC §6 (with `events` range-partitioned), seeded organization + owner, email/password login with mandatory TOTP for Owner/Admin, JWT access/refresh cookies, and integration tests proving cross-organization isolation. Next: Phase 1 (agent + server guard). See `docs/SPEC.md` §17 for the live checklist.
+
+## Telegram Webhook Setup
+
+Configure `Kella:Telegram:WebhookSecretToken` (or `Kella__Telegram__WebhookSecretToken` environment variable) with a secret token (1-256 characters, `[A-Za-z0-9_-]`).
+
+Register your webhook with Telegram using `secret_token`:
+```bash
+curl -F "url=https://kella.example.com/api/hooks/telegram" \
+     -F "secret_token=YOUR_WEBHOOK_SECRET_TOKEN" \
+     https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook
+```

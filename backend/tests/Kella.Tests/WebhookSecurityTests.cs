@@ -32,11 +32,11 @@ public class WebhookSecurityTests(WebApplicationFactory<Program> factory) : ICla
     {
         var client = _factory.CreateClient();
 
-        // No header
+        // No header -> 401
         var resNoHeader = await client.PostAsJsonAsync("/api/hooks/telegram", new { });
         Assert.Equal(HttpStatusCode.Unauthorized, resNoHeader.StatusCode);
 
-        // Wrong header
+        // Wrong header -> 401
         var reqWrong = new HttpRequestMessage(HttpMethod.Post, "/api/hooks/telegram")
         {
             Content = JsonContent.Create(new { })
@@ -44,6 +44,34 @@ public class WebhookSecurityTests(WebApplicationFactory<Program> factory) : ICla
         reqWrong.Headers.Add("X-Telegram-Bot-Api-Secret-Token", "wrong-token");
         var resWrong = await client.SendAsync(reqWrong);
         Assert.Equal(HttpStatusCode.Unauthorized, resWrong.StatusCode);
+
+        // Correct header -> 200
+        var reqCorrect = new HttpRequestMessage(HttpMethod.Post, "/api/hooks/telegram")
+        {
+            Content = JsonContent.Create(new { })
+        };
+        reqCorrect.Headers.Add("X-Telegram-Bot-Api-Secret-Token", SecretToken);
+        var resCorrect = await client.SendAsync(reqCorrect);
+        Assert.Equal(HttpStatusCode.OK, resCorrect.StatusCode);
+    }
+
+    [Fact]
+    public async Task Telegram_webhook_fails_closed_when_secret_not_configured_in_production()
+    {
+        using var prodFactory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseEnvironment("Production");
+            b.UseSetting("ConnectionStrings:Postgres", "");
+            b.UseSetting("Kella:Jwt:Key", "production-test-jwt-key-minimum-32-bytes!");
+            b.UseSetting("Kella:Seed:OwnerEmail", "owner@example.com");
+            b.UseSetting("Kella:Seed:OwnerPassword", "owner-secure-password-123");
+            b.UseSetting("Kella:Commands:PrivateKey", Convert.ToBase64String(new byte[32].Select((_, i) => (byte)(i + 1)).ToArray()));
+            b.UseSetting("Kella:Telegram:WebhookSecretToken", ""); // empty in Production
+        });
+
+        var client = prodFactory.CreateClient();
+        var res = await client.PostAsJsonAsync("/api/hooks/telegram", new { });
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, res.StatusCode);
     }
 
     [Fact]
