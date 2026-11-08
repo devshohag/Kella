@@ -18,6 +18,7 @@ public sealed class Organization : Entity
     public required string Name { get; set; }
     public string Plan { get; set; } = "free";
     public string Language { get; set; } = "en";
+    public Dictionary<string, string> Settings { get; set; } = [];
 }
 
 public enum UserRole { Owner, Admin, Responder, Viewer }
@@ -29,6 +30,10 @@ public sealed class User : Entity, IOrgScoped
     public required string Name { get; set; }
     public string PasswordHash { get; set; } = "";
     public UserRole Role { get; set; } = UserRole.Viewer;
+    /// <summary>Base32 TOTP secret. Null until the user completes two-factor setup.</summary>
+    public string? TotpSecret { get; set; }
+    public int FailedLoginCount { get; set; }
+    public DateTimeOffset? LockoutUntil { get; set; }
     public string? Phone { get; set; }
     public string? TelegramChatId { get; set; }
 }
@@ -68,6 +73,7 @@ public sealed class Tenant : Entity, IOrgScoped
     public string? ExternalRef { get; set; }
     public string? ContactEmail { get; set; }
     public string? ContactPhone { get; set; }
+    public string Plan { get; set; } = "free";
     public string Status { get; set; } = "active";
 }
 
@@ -81,6 +87,7 @@ public sealed class Asset : Entity, IOrgScoped
     public AssetKind Kind { get; set; }
     /// <summary>e.g. "rahmantraders.com", "billing@rahmantraders.com", "shop.example.com".</summary>
     public required string Identifier { get; set; }
+    public Dictionary<string, string> Meta { get; set; } = [];
 }
 
 public enum Severity { Info, Warning, Critical, Down }
@@ -91,6 +98,7 @@ public sealed class KellaEvent : IOrgScoped
     public Guid OrganizationId { get; set; }
     public Guid ServerId { get; set; }
     public Guid? TenantId { get; set; }
+    public Guid? AssetId { get; set; }
     public DateTimeOffset Ts { get; set; }
     public required string Module { get; set; }
     public required string Type { get; set; }
@@ -159,14 +167,52 @@ public sealed class AgentCommand : Entity
 {
     public Guid ServerId { get; set; }
     public Guid ActionId { get; set; }
-    public required string Kind { get; set; }
-    public Dictionary<string, string> Params { get; set; } = [];
-    public DateTimeOffset ExpiresAt { get; set; }
-    /// <summary>Base64 Ed25519 signature over the canonical payload. TODO(Phase 1): implement signing.</summary>
+    /// <summary>JSON payload (SPEC §6): kind, params and expiresAt. Signed as a whole in Phase 1.</summary>
+    public string Payload { get; set; } = "{}";
     public string Signature { get; set; } = "";
     public string Status { get; set; } = "queued";
     public DateTimeOffset? FetchedAt { get; set; }
     public DateTimeOffset? AckedAt { get; set; }
+}
+
+public sealed class Rule : Entity
+{
+    /// <summary>Null for built-in rules; set when an organization overrides one.</summary>
+    public Guid? OrganizationId { get; set; }
+    public required string Code { get; set; }
+    public bool Enabled { get; set; } = true;
+    public Dictionary<string, string> Params { get; set; } = [];
+}
+
+public sealed class AlertRoute : Entity, IOrgScoped
+{
+    public Guid OrganizationId { get; set; }
+    public Severity Severity { get; set; }
+    /// <summary>One or more of email, telegram, whatsapp, voice, dashboard.</summary>
+    public List<string> Channels { get; set; } = [];
+}
+
+public sealed class AlertDelivery : Entity, IOrgScoped
+{
+    public Guid OrganizationId { get; set; }
+    public Guid IncidentId { get; set; }
+    public required string Channel { get; set; }
+    public required string Recipient { get; set; }
+    public string Status { get; set; } = "pending";
+    public DateTimeOffset? SentAt { get; set; }
+    public string? Reply { get; set; }
+}
+
+/// <summary>Rolling hourly percentiles per entity (SPEC §9).</summary>
+public sealed class Baseline : Entity, IOrgScoped
+{
+    public Guid OrganizationId { get; set; }
+    public required string EntityKind { get; set; }
+    public Guid EntityId { get; set; }
+    /// <summary>0 = Monday 00:00 … 167 = Sunday 23:00, in UTC.</summary>
+    public int HourOfWeek { get; set; }
+    public double P50 { get; set; }
+    public double P95 { get; set; }
 }
 
 public sealed class AuditEntry : IOrgScoped

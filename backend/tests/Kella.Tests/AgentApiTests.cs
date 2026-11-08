@@ -15,13 +15,16 @@ public class AgentApiTests(WebApplicationFactory<Program> factory) : IClassFixtu
         b.UseEnvironment("Testing");
         b.UseSetting("ConnectionStrings:Postgres", ""); // in-memory database
         b.UseSetting("Kella:RunPipelineInApi", "true");
+        b.UseSetting("Kella:Jwt:Key", "kella-testing-only-signing-key-32b");
+        b.UseSetting("Kella:Jwt:SecureCookies", "false");
+        b.UseSetting("Kella:Seed:OwnerPassword", "test-owner-password");
     });
 
     private async Task<(HttpClient client, EnrollResponse enrolled)> EnrollAsync()
     {
         var client = _factory.CreateClient();
         var res = await client.PostAsJsonAsync("/api/agent/enroll",
-            new EnrollRequest(DevSeed.DevEnrollmentKey, $"test-{Guid.NewGuid():N}", "Ubuntu 24.04", 4, 8192, "203.0.113.10", "0.1.0"));
+            new EnrollRequest(DatabaseSeeder.DevEnrollmentKey, $"test-{Guid.NewGuid():N}", "Ubuntu 24.04", 4, 8192, "203.0.113.10", "0.1.0"));
         res.EnsureSuccessStatusCode();
         var enrolled = (await res.Content.ReadFromJsonAsync<EnrollResponse>())!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", enrolled.AgentToken);

@@ -24,30 +24,62 @@ public sealed class KellaDbContext(DbContextOptions<KellaDbContext> options, IOr
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<KellaAction> Actions => Set<KellaAction>();
     public DbSet<AgentCommand> AgentCommands => Set<AgentCommand>();
+    public DbSet<Rule> Rules => Set<Rule>();
+    public DbSet<AlertRoute> AlertRoutes => Set<AlertRoute>();
+    public DbSet<AlertDelivery> AlertDeliveries => Set<AlertDelivery>();
+    public DbSet<Baseline> Baselines => Set<Baseline>();
     public DbSet<AuditEntry> AuditLog => Set<AuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<Organization>().ToTable("organizations");
-        b.Entity<User>().ToTable("users").HasIndex(x => x.Email).IsUnique();
-        b.Entity<Server>().ToTable("servers").HasIndex(x => x.KeyHash);
-        b.Entity<EnrollmentKey>().ToTable("enrollment_keys").HasIndex(x => x.KeyHash).IsUnique();
-        b.Entity<Tenant>().ToTable("tenants");
-        b.Entity<Asset>().ToTable("assets").HasIndex(x => new { x.OrganizationId, x.Kind, x.Identifier }).IsUnique();
-        b.Entity<KellaEvent>().ToTable("events").HasIndex(x => new { x.OrganizationId, x.Ts });
-        b.Entity<Finding>().ToTable("findings");
-        b.Entity<Incident>().ToTable("incidents").HasIndex(x => new { x.OrganizationId, x.Number }).IsUnique();
-        b.Entity<KellaAction>().ToTable("actions");
-        b.Entity<AgentCommand>().ToTable("agent_commands").HasIndex(x => new { x.ServerId, x.Status });
-        b.Entity<AuditEntry>().ToTable("audit_log");
+        b.Entity<Organization>().Property(x => x.Settings).HasJsonConversion().HasColumnType("jsonb");
 
-        // Dictionaries/lists are stored as JSON. TODO(Phase 0): switch to jsonb columns via Npgsql when migrations are added.
-        b.Entity<Server>().PrimitiveCollection(x => x.Detected);
-        b.Entity<Server>().PrimitiveCollection(x => x.Guards);
-        b.Entity<KellaEvent>().Property(x => x.Attrs).HasJsonConversion();
-        b.Entity<Finding>().Property(x => x.Evidence).HasJsonConversion();
-        b.Entity<KellaAction>().Property(x => x.Params).HasJsonConversion();
-        b.Entity<AgentCommand>().Property(x => x.Params).HasJsonConversion();
+        b.Entity<User>().ToTable("users").HasIndex(x => x.Email).IsUnique();
+
+        b.Entity<Server>().ToTable("servers").HasIndex(x => x.KeyHash);
+        b.Entity<Server>().PrimitiveCollection(x => x.Detected).HasColumnType("jsonb");
+        b.Entity<Server>().PrimitiveCollection(x => x.Guards).HasColumnType("text[]");
+
+        b.Entity<EnrollmentKey>().ToTable("enrollment_keys").HasIndex(x => x.KeyHash).IsUnique();
+
+        b.Entity<Tenant>().ToTable("tenants");
+
+        b.Entity<Asset>().ToTable("assets").HasIndex(x => new { x.OrganizationId, x.Kind, x.Identifier }).IsUnique();
+        b.Entity<Asset>().Property(x => x.Meta).HasJsonConversion().HasColumnType("jsonb");
+
+        // events is range-partitioned by ts in the migration; a partitioned table's primary key must contain it.
+        b.Entity<KellaEvent>().ToTable("events").HasKey(x => new { x.Id, x.Ts });
+        b.Entity<KellaEvent>().HasIndex(x => new { x.OrganizationId, x.Ts });
+        b.Entity<KellaEvent>().Property(x => x.Attrs).HasJsonConversion().HasColumnType("jsonb");
+
+        b.Entity<Finding>().ToTable("findings");
+        b.Entity<Finding>().Property(x => x.Evidence).HasJsonConversion().HasColumnType("jsonb");
+
+        b.Entity<Incident>().ToTable("incidents").HasIndex(x => new { x.OrganizationId, x.Number }).IsUnique();
+        b.Entity<Incident>().Property(x => x.AiAnalysisJson).HasColumnType("jsonb");
+
+        b.Entity<KellaAction>().ToTable("actions");
+        b.Entity<KellaAction>().Property(x => x.Params).HasJsonConversion().HasColumnType("jsonb");
+        b.Entity<KellaAction>().Property(x => x.ResultJson).HasColumnType("jsonb");
+
+        b.Entity<AgentCommand>().ToTable("agent_commands").HasIndex(x => new { x.ServerId, x.Status });
+        b.Entity<AgentCommand>().Property(x => x.Payload).HasColumnType("jsonb");
+
+        b.Entity<Rule>().ToTable("rules").HasIndex(x => new { x.OrganizationId, x.Code }).IsUnique();
+        b.Entity<Rule>().Property(x => x.Params).HasJsonConversion().HasColumnType("jsonb");
+        // Built-in rules have no organization and are visible to everyone.
+        b.Entity<Rule>().HasQueryFilter(r => r.OrganizationId == null || r.OrganizationId == CurrentOrgId);
+
+        b.Entity<AlertRoute>().ToTable("alert_routes").HasIndex(x => new { x.OrganizationId, x.Severity }).IsUnique();
+        b.Entity<AlertRoute>().PrimitiveCollection(x => x.Channels).HasColumnType("text[]");
+
+        b.Entity<AlertDelivery>().ToTable("alert_deliveries").HasIndex(x => new { x.OrganizationId, x.IncidentId });
+
+        b.Entity<Baseline>().ToTable("baselines").HasIndex(x => new { x.OrganizationId, x.EntityKind, x.EntityId, x.HourOfWeek }).IsUnique();
+
+        b.Entity<AuditEntry>().ToTable("audit_log").HasIndex(x => new { x.OrganizationId, x.Ts });
+        b.Entity<AuditEntry>().Property(x => x.DataJson).HasColumnType("jsonb");
 
         foreach (var type in b.Model.GetEntityTypes().Where(t => typeof(IOrgScoped).IsAssignableFrom(t.ClrType)))
         {

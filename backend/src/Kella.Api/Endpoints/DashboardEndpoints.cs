@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Kella.Core.Actions;
 using Kella.Core.Domain;
 using Kella.Infrastructure.Data;
 using Kella.Infrastructure.Security;
@@ -10,12 +11,13 @@ public sealed record IncidentListItem(Guid Id, string Number, string Title, stri
 public sealed record ServerListItem(Guid Id, string Name, string? PublicIp, string Status, IReadOnlyList<string> Detected, IReadOnlyList<string> Guards, DateTimeOffset? LastSeenAt);
 public sealed record EnrollmentKeyResponse(string Key, DateTimeOffset ExpiresAt, string InstallCommand);
 
-/// <summary>Dashboard API (SPEC §14). Requires an organization on the request (see DevOrgMiddleware / auth).</summary>
+/// <summary>Dashboard API (SPEC §14). Requires an authenticated organization on the request.</summary>
 public static class DashboardEndpoints
 {
-    public static void MapDashboardEndpoints(this WebApplication app)
+    public static void MapDashboardEndpoints(this WebApplication app, bool requireAuth)
     {
         var g = app.MapGroup("/api").WithTags("Dashboard").AddEndpointFilter<RequireOrgFilter>();
+        if (requireAuth) g.RequireAuthorization();
 
         g.MapGet("/overview", async (KellaDbContext db, CancellationToken ct) =>
         {
@@ -67,7 +69,7 @@ public static class DashboardEndpoints
             return Results.Ok(new { incident = ToListItem(inc), inc.Summary, findings, actions });
         });
 
-        g.MapPost("/actions/{id:guid}/approve", async (Guid id, KellaDbContext db, CancellationToken ct) =>
+        g.MapPost("/actions/{id:guid}/approve", async (Guid id, KellaDbContext db, HttpContext http, CancellationToken ct) =>
         {
             var action = await db.Actions.FirstOrDefaultAsync(a => a.Id == id, ct);
             if (action is null) return Results.NotFound();
@@ -75,11 +77,16 @@ public static class DashboardEndpoints
             if (action.ExpiresAt < DateTimeOffset.UtcNow) { action.Status = ActionStatus.Expired; await db.SaveChangesAsync(ct); return Results.Problem("Approval expired.", statusCode: 410); }
 
             action.Status = ActionStatus.Queued;
-            action.ApprovedBy = "dev-user"; // TODO(Phase 0): current user id from auth
+            action.ApprovedBy = http.User.FindFirst("sub")?.Value ?? "system";
+            var payload = new AgentCommandPayload(
+                action.Kind,
+                new Dictionary<string, string>(action.Params),
+                DateTimeOffset.UtcNow.AddMinutes(10));
             db.AgentCommands.Add(new AgentCommand
             {
-                ServerId = action.ServerId, ActionId = action.Id, Kind = action.Kind,
-                Params = new(action.Params), ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+                ServerId = action.ServerId,
+                ActionId = action.Id,
+                Payload = AgentCommandPayloadJson.Serialize(payload),
             });
             db.AuditLog.Add(new AuditEntry
             {

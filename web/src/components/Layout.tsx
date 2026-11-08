@@ -1,4 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { api } from '../api'
 import styles from './Layout.module.css'
 
 const nav = [
@@ -24,6 +26,17 @@ function Item({ to, label, end, todo }: { to: string; label: string; end?: boole
 }
 
 export function Layout() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const session = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false, staleTime: 30_000 })
+  const logout = useMutation({
+    mutationFn: api.logout,
+    onSettled: () => {
+      queryClient.clear()
+      navigate('/login', { replace: true })
+    },
+  })
+
   return (
     <div className={styles.shell}>
       <aside className={styles.rail}>
@@ -41,6 +54,13 @@ export function Layout() {
           <hr className={styles.rule} />
           {settings.map((n) => <Item key={n.to} {...n} />)}
         </nav>
+        <div className={styles.account}>
+          <div className={styles.who}>{session.data?.name ?? 'Signed in'}</div>
+          <div className={styles.email}>{session.data?.email}</div>
+          <button className={styles.signout} onClick={() => logout.mutate()} disabled={logout.isPending}>
+            {logout.isPending ? 'Signing out…' : 'Sign out'}
+          </button>
+        </div>
       </aside>
       <main className={styles.main}>
         <Outlet />

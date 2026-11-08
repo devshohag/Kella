@@ -17,9 +17,12 @@ public static class DependencyInjection
         services.AddScoped<IOrgContext>(sp => sp.GetRequiredService<OrgContext>());
 
         var cs = config.GetConnectionString("Postgres");
+        // Unique name per host: EF's in-memory store is process-wide, so a fixed name would leak rows
+        // between test hosts (and between parallel test classes).
+        var inMemoryName = $"kella-{Guid.NewGuid():N}";
         services.AddDbContext<KellaDbContext>(o =>
         {
-            if (string.IsNullOrWhiteSpace(cs)) o.UseInMemoryDatabase("kella-dev");
+            if (string.IsNullOrWhiteSpace(cs)) o.UseInMemoryDatabase(inMemoryName);
             else o.UseNpgsql(cs);
         });
 

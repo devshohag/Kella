@@ -1,6 +1,8 @@
 import { Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { RequireAuth } from './components/RequireAuth'
 import { IncidentDetail, Incidents } from './pages/Incidents'
+import { Login } from './pages/Login'
 import { Overview } from './pages/Overview'
 import { Servers } from './pages/Servers'
 import { Soon } from './pages/Soon'
@@ -8,7 +10,14 @@ import { Soon } from './pages/Soon'
 export default function App() {
   return (
     <Routes>
-      <Route element={<Layout />}>
+      <Route path="login" element={<Login />} />
+      <Route
+        element={
+          <RequireAuth>
+            <Layout />
+          </RequireAuth>
+        }
+      >
         <Route index element={<Overview />} />
         <Route path="incidents" element={<Incidents />} />
         <Route path="incidents/:id" element={<IncidentDetail />} />

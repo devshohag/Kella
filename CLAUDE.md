@@ -41,8 +41,8 @@ Never commit with failing builds or tests. Never delete or skip a test to make i
 
 - Backend: entities for all core tables, org-scoped DbContext, agent API (enroll, facts, events, long-poll commands, ack), dashboard API (overview, servers, enrollment keys, incidents, approve), in-process event bus, rule engine with `ssh.bruteforce` and `mail.bruteforce_ip`, AI redactor. 15 tests including an end-to-end brute-force → block_ip test.
 - Agent: enrollment + token storage, service detection, /proc metrics heartbeat, auth.log tailer + parser, gzip event batches, long-poll command loop, `block_ip`/`unblock_ip` via nftables with allowlist, expiry and Ed25519 signature checks.
-- Web: layout, Overview, Incidents, Incident detail with approve, Servers with install command. Other screens are placeholders.
-- Dev mode runs without Postgres (in-memory DB) and without login. Search for `TODO(Phase` to see what each phase must replace.
+- Web: layout, login (password + TOTP setup), Overview, Incidents, Incident detail with approve, Servers with install command. Other screens are placeholders.
+- Dev mode runs without Postgres (in-memory DB). `Kella:DevOrg:Enabled` bypasses login for local development; set it to `false` to use the login page.
 
 ## Working rules
 
@@ -50,7 +50,7 @@ Never commit with failing builds or tests. Never delete or skip a test to make i
 2. **Small vertical slices.** One feature end to end (agent → API → worker → UI) per task, with tests.
 3. **Event type names, API routes and table names in the spec are a contract.** Do not rename them.
 4. **Hot path stays deterministic.** No LLM calls in ingest, aggregation, rules or playbooks. AI only in `Kella.Worker/Ai`.
-5. **Tenant scoping.** Every query goes through `KellaDbContext` with the organization filter. `IgnoreQueryFilters()` is allowed only in: agent enrollment and agent token lookup (`AgentEndpoints.cs`), migrations/seeding, and tests. Nowhere else.
+5. **Tenant scoping.** Every query goes through `KellaDbContext` with the organization filter. `IgnoreQueryFilters()` is allowed only in: agent enrollment and agent token lookup (`AgentEndpoints.cs`), auth login (email lookup before an organization is known, `AuthEndpoints.cs`), migrations/seeding, and tests. Nowhere else.
 6. **Every infrastructure-changing action** goes through `actions` + `agent_commands` + `audit_log`. No shortcuts.
 7. **Agent safety.** Agent must refuse unsigned/expired commands, never block allowlisted IPs or the cloud endpoint IP, and keep RSS < 50 MB.
 8. **Parsers need real log samples** in `agent/internal/parsers/testdata/` and table-driven tests.

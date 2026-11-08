@@ -1,6 +1,6 @@
-# Local stack. `docker compose up -d` then open http://localhost:8080
-# The API runs in Development mode here so it seeds the demo organization and creates tables
-# (EnsureCreated). TODO(Phase 0): switch to EF Core migrations and a Production profile.
+# Local stack. `docker compose up -d --build` then open http://localhost:8080
+# The API applies EF Core migrations and seeds the demo organization + owner on first start (SPEC §17 Phase 0).
+# Demo login: owner@example.com / kella-dev-password (two-factor setup runs on first sign-in).
 services:
   postgres:
     image: postgres:16-alpine
@@ -34,18 +34,27 @@ services:
       ASPNETCORE_URLS: http://+:5080
       ConnectionStrings__Postgres: Host=postgres;Database=kella;Username=kella;Password=kella-dev-password
       Kella__RunPipelineInApi: "true"
+      Kella__DevOrg__Enabled: "false" # exercise the real login page
+      Kella__Jwt__Key: kella-compose-only-signing-key-32-bytes
+      Kella__Jwt__SecureCookies: "false" # local stack is plain HTTP
+      Kella__Seed__OrganizationName: Northwind Hosting (dev)
+      Kella__Seed__OwnerEmail: owner@example.com
+      Kella__Seed__OwnerPassword: kella-dev-password
       Kella__WebOrigins__0: http://localhost:8080
     ports: ["5080:5080"]
     depends_on:
       postgres: { condition: service_healthy }
 
-  # Enable once NatsEventBus exists (Phase 1); until then the API runs the pipeline in-process.
-  # worker:
-  #   build: { context: ./backend, args: { PROJECT: Kella.Worker } }
-  #   environment:
-  #     ConnectionStrings__Postgres: Host=postgres;Database=kella;Username=kella;Password=kella-dev-password
-  #     Nats__Url: nats://nats:4222
-  #   depends_on: [postgres, nats]
+  # Until NatsEventBus exists (Phase 1) the API runs the pipeline in-process; the worker is part of
+  # the required full stack and starts idle, ready to host consumers once the bus is wired.
+  worker:
+    build: { context: ./backend, args: { PROJECT: Kella.Worker } }
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Database=kella;Username=kella;Password=kella-dev-password
+      Nats__Url: nats://nats:4222
+    depends_on:
+      postgres: { condition: service_healthy }
 
   web:
     build: ./web

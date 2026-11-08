@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Kella.Core;
+using Kella.Core.Actions;
 using Kella.Core.Domain;
 using Kella.Infrastructure.Data;
 
@@ -89,13 +90,15 @@ public sealed class RuleEngineService(
 
             if (s.Mode == ActionMode.Auto)
             {
+                var payload = new AgentCommandPayload(
+                    s.Kind,
+                    new Dictionary<string, string>(s.Params),
+                    DateTimeOffset.UtcNow.AddMinutes(10));
                 db.AgentCommands.Add(new AgentCommand
                 {
                     ServerId = evt.ServerId,
                     ActionId = action.Id,
-                    Kind = s.Kind,
-                    Params = new(s.Params),
-                    ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+                    Payload = AgentCommandPayloadJson.Serialize(payload),
                 });
             }
         }

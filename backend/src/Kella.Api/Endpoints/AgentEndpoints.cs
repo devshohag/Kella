@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Kella.Core;
+using Kella.Core.Actions;
 using Kella.Core.Domain;
 using Kella.Infrastructure;
 using Kella.Infrastructure.Data;
@@ -124,15 +125,28 @@ public static class AgentEndpoints
         while (true)
         {
             var now = DateTimeOffset.UtcNow;
-            var cmds = await db.AgentCommands
-                .Where(c => c.ServerId == server.Id && c.Status == "queued" && c.ExpiresAt > now)
+            var queued = await db.AgentCommands
+                .Where(c => c.ServerId == server.Id && c.Status == "queued")
                 .OrderBy(c => c.CreatedAt).Take(50).ToListAsync(ct);
 
-            if (cmds.Count > 0 || now >= deadline)
+            var ready = new List<(AgentCommand Command, AgentCommandPayload Payload)>();
+            foreach (var command in queued)
             {
-                foreach (var c in cmds) { c.Status = "sent"; c.FetchedAt = now; }
+                var payload = AgentCommandPayloadJson.TryParse(command.Payload);
+                if (payload is null || payload.ExpiresAt <= now)
+                {
+                    command.Status = "expired";
+                    continue;
+                }
+                ready.Add((command, payload));
+            }
+
+            if (ready.Count > 0 || now >= deadline)
+            {
+                foreach (var (command, _) in ready) { command.Status = "sent"; command.FetchedAt = now; }
                 await db.SaveChangesAsync(ct);
-                return Results.Ok(cmds.Select(c => new CommandDto(c.Id, c.Kind, c.Params, c.ExpiresAt, c.Signature)));
+                return Results.Ok(ready.Select(x => new CommandDto(
+                    x.Command.Id, x.Payload.Kind, x.Payload.Params, x.Payload.ExpiresAt, x.Command.Signature)));
             }
             await Task.Delay(1000, ct);
         }

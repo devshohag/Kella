@@ -32,8 +32,10 @@ The agent logs `dry run: nft add element inet kella kella_block { 45.148.10.92 t
 ## Run the full stack with Docker
 
 ```bash
-docker compose up -d --build          # Postgres, NATS, VictoriaMetrics, API, web on http://localhost:8080
+docker compose up -d --build          # Postgres, NATS, VictoriaMetrics, API, worker, web on http://localhost:8080
 ```
+
+Sign in at http://localhost:8080/login as `owner@example.com` / `kella-dev-password`; the first sign-in sets up two-factor authentication. The compose API runs with `Kella__DevOrg__Enabled=false` so the real login path is exercised.
 
 ## Check everything
 
@@ -53,6 +55,6 @@ deploy/    install.sh, systemd unit
 docs/      SPEC.md, design, decisions
 ```
 
-## First prompt for your coding agent
+## Status
 
-> Read CLAUDE.md and docs/SPEC.md. We are starting Phase 0 in SPEC §17. Replace EnsureCreated with EF Core migrations for every table in SPEC §6, then implement login with ASP.NET Identity, TOTP and JWT cookies, removing DevOrgMiddleware from non-development environments. Add an integration test that proves a user of one organization cannot read another organization's servers, incidents or actions through any endpoint. Run all checks, tick the Phase 0 boxes you completed, and commit.
+Phase 0 complete: EF Core migrations for every table in SPEC §6 (with `events` range-partitioned), seeded organization + owner, email/password login with mandatory TOTP for Owner/Admin, JWT access/refresh cookies, and integration tests proving cross-organization isolation. Next: Phase 1 (agent + server guard). See `docs/SPEC.md` §17 for the live checklist.

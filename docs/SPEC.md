@@ -95,7 +95,8 @@ All tables have `id uuid pk`, `organization_id uuid not null` (except `organizat
 
 ```
 organizations(id, name, plan, settings jsonb)
-users(id, organization_id, email, password_hash, name, role, totp_secret, phone, telegram_chat_id)
+users(id, organization_id, email, password_hash, name, role, totp_secret, phone, telegram_chat_id,
+      failed_login_count, lockout_until null)   -- lockout after 5 failures (see 16)
 servers(id, organization_id, name, hostname, public_ip inet, os, cpu_count, ram_mb,
         agent_version, key_hash, status[pending|online|offline|disabled],
         last_seen_at, detected jsonb, guards text[])
@@ -103,8 +104,8 @@ tenants(id, organization_id, name, external_ref, contact_email, contact_phone, p
 assets(id, organization_id, tenant_id, server_id, kind[domain|mailbox|site|sip_trunk|database|container],
        identifier text, meta jsonb, unique(organization_id, kind, identifier))
 events(id, organization_id, server_id, tenant_id null, asset_id null, ts, module, type,
-       severity, source_ip inet null, attrs jsonb)            -- partitioned by day, 30-day retention
-findings(id, organization_id, rule_id, tenant_id null, server_id, severity, title, summary,
+       severity, source_ip inet null, attrs jsonb)            -- range-partitioned by ts, 30-day retention
+findings(id, organization_id, rule_code text, tenant_id null, server_id, severity, title, summary,
          evidence jsonb, first_seen, last_seen, incident_id)
 incidents(id, organization_id, number int, tenant_id null, server_id null, type, severity,
           status[open|contained|resolved], title, summary, opened_at, contained_at, resolved_at,
@@ -117,6 +118,7 @@ rules(id, organization_id null /* null = built-in */, code, enabled, params json
 alert_routes(id, organization_id, severity, channels text[])
 alert_deliveries(id, organization_id, incident_id, channel, recipient, status, sent_at, reply)
 audit_log(id, organization_id, actor_type[user|system|agent], actor_id, verb, target, data jsonb, ts)
+baselines(id, organization_id, entity_kind, entity_id, hour_of_week, p50, p95, updated_at)
 ```
 
 Rules for the agent:
@@ -403,9 +405,9 @@ Copy rules: say what happened in plain words ("Hijacked mailbox sending spam"), 
 Build strictly in this order. A phase is done only when all its acceptance criteria pass in CI or in the documented manual test.
 
 ### Phase 0 — Foundations (template already provides the skeleton)
-- [ ] `docker compose up` starts Postgres, NATS, VictoriaMetrics, API, worker, web.
-- [ ] EF Core migrations for all tables in §6; seed one organization + owner user.
-- [ ] Login works; JWT cookie; org query filter with cross-org test.
+- [x] `docker compose up` starts Postgres, NATS, VictoriaMetrics, API, worker, web.
+- [x] EF Core migrations for all tables in §6; seed one organization + owner user.
+- [x] Login works; JWT cookie; org query filter with cross-org test.
 
 ### Phase 1 — Agent + Server Guard
 - [ ] Agent enrolls, reports facts and heartbeats; server shows Online in dashboard.

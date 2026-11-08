@@ -53,6 +53,26 @@ export interface IncidentDetail {
   actions: KellaAction[]
 }
 
+export interface AuthUser {
+  id: string
+  email: string
+  name: string
+  role: 'Owner' | 'Admin' | 'Responder' | 'Viewer'
+  organizationId: string
+  organizationName: string
+}
+
+export interface LoginResult {
+  totpSetupRequired: boolean
+  setupToken: string | null
+  user: AuthUser | null
+}
+
+export interface TotpSetup {
+  secret: string
+  otpauthUri: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...init })
   if (!res.ok) {
@@ -67,6 +87,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  me: () => request<AuthUser>('/api/auth/me'),
+  login: (email: string, password: string, totpCode?: string) =>
+    request<LoginResult>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password, totpCode: totpCode || null }) }),
+  logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+  totpSetup: (setupToken: string) =>
+    request<TotpSetup>('/api/auth/totp/setup', { method: 'POST', body: JSON.stringify({ setupToken }) }),
+  totpEnable: (setupToken: string, code: string) =>
+    request<AuthUser>('/api/auth/totp/enable', { method: 'POST', body: JSON.stringify({ setupToken, code }) }),
   overview: () => request<Overview>('/api/overview'),
   servers: () => request<ServerListItem[]>('/api/servers'),
   createEnrollmentKey: () => request<EnrollmentKey>('/api/servers/enrollment-keys', { method: 'POST' }),
