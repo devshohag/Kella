@@ -21,18 +21,25 @@ func TestParseMailLine(t *testing.T) {
 		isNil    bool
 	}{
 		{
-			name:     "Dovecot IMAP failed",
+			name:     "Dovecot IMAP failed format 1",
 			line:     "Nov  8 02:14:01 mail-01 dovecot: imap-login: Disconnected: Connection closed: auth failed, method=PLAIN, user=<billing@rahmantraders.com>, rip=45.148.10.92, lip=192.168.1.10",
 			wantType: model.TypeMailAuthFailed,
 			wantIP:   "45.148.10.92",
 			wantUser: "billing@rahmantraders.com",
 		},
 		{
-			name:     "Dovecot POP3 aborted",
-			line:     "Nov  8 02:14:05 mail-01 dovecot: pop3-login: Aborted login: auth failed, method=PLAIN, user=<info@example.com>, rip=185.220.101.5, lip=192.168.1.10",
+			name:     "Dovecot 2.3 real format - Aborted login",
+			line:     "Nov  8 02:14:05 mail-01 dovecot: pop3-login: Aborted login (auth failed, 1 attempts in 4 secs): user=<info@example.com>, method=PLAIN, rip=185.220.101.5, lip=192.168.1.10",
 			wantType: model.TypeMailAuthFailed,
 			wantIP:   "185.220.101.5",
 			wantUser: "info@example.com",
+		},
+		{
+			name:     "Dovecot 2.3 real format - Disconnected auth failed",
+			line:     "Nov  8 02:14:08 mail-01 dovecot: imap-login: Disconnected (auth failed, 1 attempts in 2 secs): user=<ceo@victim.com>, method=PLAIN, rip=193.32.162.20, lip=192.168.1.10, TLS",
+			wantType: model.TypeMailAuthFailed,
+			wantIP:   "193.32.162.20",
+			wantUser: "ceo@victim.com",
 		},
 		{
 			name:     "Dovecot login success",
@@ -42,10 +49,17 @@ func TestParseMailLine(t *testing.T) {
 			wantUser: "sales@acme.com",
 		},
 		{
+			name:     "Postfix smtpd SASL failure",
+			line:     "Nov  8 02:14:15 mail-01 postfix/smtpd[4512]: warning: unknown[198.51.100.55]: SASL LOGIN authentication failed: UGFzc3dvcmQ6",
+			wantType: model.TypeMailAuthFailed,
+			wantIP:   "198.51.100.55",
+			wantUser: "",
+		},
+		{
 			name:     "Postfix message queued",
 			line:     "Nov  8 02:15:00 mail-01 postfix/qmgr[2345]: 4Sxyz91234z: from=<spammer@badtenant.com>, size=4521, nrcpt=50 (queue active)",
 			wantType: model.TypeMailMessageQueue,
-			wantUser: "", // Postfix qmgr has sender in Attrs["sender"]
+			wantUser: "",
 		},
 		{
 			name:  "Postfix cleanup irrelevant line",
@@ -94,8 +108,8 @@ func TestMailLogSample(t *testing.T) {
 		}
 	}
 
-	if counts[model.TypeMailAuthFailed] != 2 {
-		t.Errorf("expected 2 auth_failed, got %d", counts[model.TypeMailAuthFailed])
+	if counts[model.TypeMailAuthFailed] != 4 {
+		t.Errorf("expected 4 auth_failed (3 dovecot + 1 postfix SASL), got %d", counts[model.TypeMailAuthFailed])
 	}
 	if counts[model.TypeMailAuthSuccess] != 1 {
 		t.Errorf("expected 1 auth_succeeded, got %d", counts[model.TypeMailAuthSuccess])

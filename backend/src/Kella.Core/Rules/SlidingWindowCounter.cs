@@ -22,5 +22,16 @@ public sealed class SlidingWindowCounter(TimeSpan window)
         }
     }
 
+    public int Count(string key, DateTimeOffset at)
+    {
+        if (!_hits.TryGetValue(key, out var q)) return 0;
+        lock (q)
+        {
+            while (q.Count > 0 && at - q.Peek() > window)
+                q.Dequeue();
+            return q.Count;
+        }
+    }
+
     public void Reset(string key) => _hits.TryRemove(key, out _);
 }

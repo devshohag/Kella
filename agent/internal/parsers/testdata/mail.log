@@ -1,6 +1,8 @@
 Nov  8 02:14:01 mail-01 dovecot: imap-login: Disconnected: Connection closed: auth failed, method=PLAIN, user=<billing@rahmantraders.com>, rip=45.148.10.92, lip=192.168.1.10
-Nov  8 02:14:05 mail-01 dovecot: pop3-login: Aborted login: auth failed, method=PLAIN, user=<info@example.com>, rip=185.220.101.5, lip=192.168.1.10
+Nov  8 02:14:05 mail-01 dovecot: pop3-login: Aborted login (auth failed, 1 attempts in 4 secs): user=<info@example.com>, method=PLAIN, rip=185.220.101.5, lip=192.168.1.10
+Nov  8 02:14:08 mail-01 dovecot: imap-login: Disconnected (auth failed, 1 attempts in 2 secs): user=<ceo@victim.com>, method=PLAIN, rip=193.32.162.20, lip=192.168.1.10, TLS
 Nov  8 02:14:10 mail-01 dovecot: imap-login: Login: user=<sales@acme.com>, method=PLAIN, rip=203.0.113.15, lip=192.168.1.10, mpid=12345, TLS
+Nov  8 02:14:15 mail-01 postfix/smtpd[4512]: warning: unknown[198.51.100.55]: SASL LOGIN authentication failed: UGFzc3dvcmQ6
 Nov  8 02:15:00 mail-01 postfix/qmgr[2345]: 4Sxyz91234z: from=<spammer@badtenant.com>, size=4521, nrcpt=50 (queue active)
 Nov  8 02:15:02 mail-01 postfix/cleanup[2346]: 4Sxyz95678z: message-id=<20261108021502.1234@mail.badtenant.com>
 Nov  8 02:15:03 mail-01 postfix/qmgr[2345]: 4Sxyz95678z: from=<billing@rahmantraders.com>, size=1240, nrcpt=1 (queue active)

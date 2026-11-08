@@ -56,7 +56,7 @@ public sealed class MailOutboundSpikeRule : IRule
                     ActionMode.Auto,
                     $"Hold messages from {sender}"),
                 new SuggestedAction(
-                    "reset_mailbox_password",
+                    ActionKinds.ResetMailboxPassword,
                     new Dictionary<string, string> { ["mailbox"] = sender },
                     ActionMode.Approval,
                     $"Reset password for {sender}"),
@@ -71,6 +71,13 @@ public sealed class MailOutboundSpikeRule : IRule
 public sealed class MailAccountTakeoverRule : IRule
 {
     private readonly SlidingWindowCounter _failedLogins = new(TimeSpan.FromHours(2));
+    private readonly SlidingWindowCounter _outboundCounts = new(TimeSpan.FromMinutes(10));
+    private readonly int _minOutboundSpike;
+
+    public MailAccountTakeoverRule(int minOutboundSpike = 50)
+    {
+        _minOutboundSpike = minOutboundSpike;
+    }
 
     public string Code => "mail.account_takeover";
     public IReadOnlySet<string> EventTypes { get; } = new HashSet<string>
@@ -97,16 +104,24 @@ public sealed class MailAccountTakeoverRule : IRule
                 return null;
 
             var key = $"{evt.ServerId}:{sender.ToLowerInvariant()}";
-            // Check if there was any prior auth failure in the 2 hour window
-            var authFailures = _failedLogins.Add(key, evt.Ts) - 1; // get without re-adding
+
+            // Track outbound messages without polluting the auth failure counter
+            var outboundCount = _outboundCounts.Add(key, evt.Ts);
+            if (outboundCount < _minOutboundSpike)
+                return null;
+
+            // Check if there was prior auth failure or anomaly in the 2 hour window
+            var authFailures = _failedLogins.Count(key, evt.Ts);
             if (authFailures >= 5)
             {
                 _failedLogins.Reset(key);
+                _outboundCounts.Reset(key);
 
                 var evidence = new Dictionary<string, string>
                 {
                     ["mailbox"] = sender,
                     ["recentAuthFailures"] = authFailures.ToString(),
+                    ["outboundMessages"] = outboundCount.ToString(),
                     ["detectedAt"] = evt.Ts.ToString("O"),
                 };
 
@@ -114,7 +129,7 @@ public sealed class MailAccountTakeoverRule : IRule
                     Code,
                     Severity.Critical,
                     $"Account takeover detected for {sender}",
-                    $"Recent failed authentications followed by immediate outbound sending on {sender}.",
+                    $"{authFailures} recent failed authentications followed by outbound spike ({outboundCount} msgs) on {sender}.",
                     evidence,
                     [
                         new SuggestedAction(
@@ -123,12 +138,12 @@ public sealed class MailAccountTakeoverRule : IRule
                             ActionMode.Auto,
                             $"Hold messages from {sender}"),
                         new SuggestedAction(
-                            "reset_mailbox_password",
+                            ActionKinds.ResetMailboxPassword,
                             new Dictionary<string, string> { ["mailbox"] = sender },
                             ActionMode.Approval,
                             $"Reset password for {sender}"),
                         new SuggestedAction(
-                            "delete_held_messages",
+                            ActionKinds.DeleteHeldMessages,
                             new Dictionary<string, string> { ["sender"] = sender },
                             ActionMode.Approval,
                             $"Delete held messages from {sender}"),

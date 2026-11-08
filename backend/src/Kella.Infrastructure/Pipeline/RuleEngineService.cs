@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -46,18 +47,43 @@ public sealed class RuleEngineService(
         var signer = scope.ServiceProvider.GetRequiredService<CommandSigner>();
         var router = scope.ServiceProvider.GetRequiredService<IAlertRouter>();
 
-        var incident = new Incident
+        var twoHoursAgo = evt.Ts.AddHours(-2);
+        // Look for open incident with same server, tenant and type family
+        var incident = await db.Incidents
+            .FirstOrDefaultAsync(i => i.ServerId == evt.ServerId &&
+                                      i.TenantId == evt.TenantId &&
+                                      i.Type == match.RuleCode &&
+                                      i.Status != IncidentStatus.Resolved &&
+                                      i.OpenedAt >= twoHoursAgo, ct);
+
+        var isNewIncident = false;
+        if (incident is null)
         {
-            OrganizationId = evt.OrganizationId,
-            Number = (db.Incidents.Max(i => (int?)i.Number) ?? 2000) + 1,
-            TenantId = evt.TenantId,
-            ServerId = evt.ServerId,
-            Type = match.RuleCode,
-            Severity = match.Severity,
-            Title = match.Title,
-            Summary = match.Summary,
-        };
-        db.Incidents.Add(incident);
+            isNewIncident = true;
+            incident = new Incident
+            {
+                OrganizationId = evt.OrganizationId,
+                Number = (db.Incidents.Max(i => (int?)i.Number) ?? 2000) + 1,
+                TenantId = evt.TenantId,
+                ServerId = evt.ServerId,
+                Type = match.RuleCode,
+                Severity = match.Severity,
+                Title = match.Title,
+                Summary = match.Summary,
+                OpenedAt = evt.Ts,
+            };
+            db.Incidents.Add(incident);
+        }
+        else
+        {
+            // Join existing incident
+            if (match.Severity > incident.Severity)
+            {
+                incident.Severity = match.Severity;
+            }
+            incident.Summary = $"{incident.Summary}\n{match.Summary}".Trim();
+            incident.UpdatedAt = DateTimeOffset.UtcNow;
+        }
 
         db.Findings.Add(new Finding
         {
@@ -74,8 +100,20 @@ public sealed class RuleEngineService(
             IncidentId = incident.Id,
         });
 
+        // Query existing active/queued actions on this incident to avoid duplicate actions/commands
+        var existingActions = await db.Actions
+            .Where(a => a.IncidentId == incident.Id && a.Status != ActionStatus.Rejected && a.Status != ActionStatus.Failed)
+            .ToListAsync(ct);
+
         foreach (var s in match.Actions)
         {
+            // Check if identical action already queued or pending
+            var duplicate = existingActions.Any(ea =>
+                ea.Kind == s.Kind &&
+                s.Params.All(kv => ea.Params.TryGetValue(kv.Key, out var ev) && ev == kv.Value));
+
+            if (duplicate) continue;
+
             var action = new KellaAction
             {
                 OrganizationId = evt.OrganizationId,
@@ -102,14 +140,17 @@ public sealed class RuleEngineService(
             }
         }
 
-        db.AuditLog.Add(new AuditEntry
+        if (isNewIncident)
         {
-            OrganizationId = evt.OrganizationId,
-            ActorType = "system",
-            ActorId = match.RuleCode,
-            Verb = "incident.opened",
-            Target = $"incident:{incident.Id}",
-        });
+            db.AuditLog.Add(new AuditEntry
+            {
+                OrganizationId = evt.OrganizationId,
+                ActorType = "system",
+                ActorId = match.RuleCode,
+                Verb = "incident.opened",
+                Target = $"incident:{incident.Id}",
+            });
+        }
 
         await db.SaveChangesAsync(ct);
         log.LogInformation("INC-{Number} opened by {Rule}: {Title}", incident.Number, match.RuleCode, match.Title);

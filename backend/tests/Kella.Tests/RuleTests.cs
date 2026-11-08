@@ -103,4 +103,74 @@ public class RuleTests
         Assert.Equal(Severity.Critical, match.Severity);
         Assert.Contains(match.Actions, a => a.Kind == ActionKinds.HoldSender && a.Mode == ActionMode.Auto);
     }
+
+    [Fact]
+    public void Mail_account_takeover_does_not_fire_from_outbound_messages_alone()
+    {
+        var rule = new MailAccountTakeoverRule(minOutboundSpike: 5);
+        var t0 = DateTimeOffset.Parse("2026-11-08T02:00:00Z");
+
+        // Send 10 outbound messages without ANY auth failures
+        for (var i = 0; i < 10; i++)
+        {
+            var queueEvt = new KellaEvent
+            {
+                OrganizationId = Guid.NewGuid(),
+                ServerId = Server,
+                Ts = t0.AddSeconds(i * 10),
+                Module = Modules.Mail,
+                Type = EventTypes.MailMessageQueued,
+                Attrs = new() { ["sender"] = "normal@user.com" }
+            };
+            Assert.Null(rule.Evaluate(queueEvt));
+        }
+
+        // Now simulate 5 auth failures for hacked@user.com
+        for (var i = 0; i < 5; i++)
+        {
+            var authFail = new KellaEvent
+            {
+                OrganizationId = Guid.NewGuid(),
+                ServerId = Server,
+                Ts = t0.AddMinutes(10).AddSeconds(i * 5),
+                Module = Modules.Mail,
+                Type = EventTypes.MailAuthFailed,
+                Attrs = new() { ["user"] = "hacked@user.com" }
+            };
+            Assert.Null(rule.Evaluate(authFail));
+        }
+
+        // Then send outbound spike for hacked@user.com
+        for (var i = 0; i < 4; i++)
+        {
+            var queueEvt = new KellaEvent
+            {
+                OrganizationId = Guid.NewGuid(),
+                ServerId = Server,
+                Ts = t0.AddMinutes(15).AddSeconds(i * 5),
+                Module = Modules.Mail,
+                Type = EventTypes.MailMessageQueued,
+                Attrs = new() { ["sender"] = "hacked@user.com" }
+            };
+            Assert.Null(rule.Evaluate(queueEvt));
+        }
+
+        var triggerEvt = new KellaEvent
+        {
+            OrganizationId = Guid.NewGuid(),
+            ServerId = Server,
+            Ts = t0.AddMinutes(16),
+            Module = Modules.Mail,
+            Type = EventTypes.MailMessageQueued,
+            Attrs = new() { ["sender"] = "hacked@user.com" }
+        };
+
+        var match = rule.Evaluate(triggerEvt);
+        Assert.NotNull(match);
+        Assert.Equal("mail.account_takeover", match.RuleCode);
+        Assert.Equal(Severity.Critical, match.Severity);
+        Assert.Contains(match.Actions, a => a.Kind == ActionKinds.HoldSender && a.Mode == ActionMode.Auto);
+        Assert.Contains(match.Actions, a => a.Kind == ActionKinds.ResetMailboxPassword && a.Mode == ActionMode.Approval);
+        Assert.Contains(match.Actions, a => a.Kind == ActionKinds.DeleteHeldMessages && a.Mode == ActionMode.Approval);
+    }
 }
