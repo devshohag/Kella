@@ -3,6 +3,7 @@ using System.Text;
 using Kella.Core.Actions;
 using Kella.Core.Domain;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 
@@ -16,12 +17,23 @@ public sealed class CommandSigner
 {
     private readonly Ed25519PrivateKeyParameters _privateKey;
 
-    public CommandSigner(IConfiguration config)
+    public CommandSigner(IConfiguration config, IHostEnvironment? env = null)
     {
+        var isDev = env?.IsDevelopment() == true || env?.IsEnvironment("Testing") == true;
         var raw = config["Kella:Commands:PrivateKey"];
+
         if (string.IsNullOrWhiteSpace(raw))
-            throw new InvalidOperationException(
-                "Kella:Commands:PrivateKey is required (base64 Ed25519 seed). Set KELLA__COMMANDS__PRIVATEKEY.");
+        {
+            if (isDev)
+            {
+                raw = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    "Kella:Commands:PrivateKey is required in production (base64 Ed25519 seed). Set KELLA__COMMANDS__PRIVATEKEY.");
+            }
+        }
 
         byte[] decoded;
         try { decoded = Convert.FromBase64String(raw); }
@@ -31,6 +43,12 @@ public sealed class CommandSigner
         if (decoded.Length == 64) decoded = decoded[..32];
         if (decoded.Length != Ed25519PrivateKeyParameters.KeySize)
             throw new InvalidOperationException("Kella:Commands:PrivateKey must be a 32-byte Ed25519 seed.");
+
+        if (!isDev && decoded.All(b => b == 0))
+        {
+            throw new InvalidOperationException(
+                "Kella:Commands:PrivateKey cannot be the all-zero seed in production. Set a secure key.");
+        }
 
         _privateKey = new Ed25519PrivateKeyParameters(decoded, 0);
         PublicKeyBase64 = Convert.ToBase64String(_privateKey.GeneratePublicKey().GetEncoded());

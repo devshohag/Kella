@@ -4,6 +4,7 @@ using Kella.Api.Auth;
 using Kella.Api.Endpoints;
 using Kella.Core.Domain;
 using Kella.Infrastructure;
+using Kella.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
@@ -80,6 +81,9 @@ if (builder.Configuration.GetValue("Kella:RunPipelineInApi", builder.Environment
     builder.Services.AddKellaPipeline();
 
 var app = builder.Build();
+
+// Eagerly validate command signing key at startup (SPEC §8.5, §16)
+app.Services.GetRequiredService<CommandSigner>();
 
 var devMode = app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing");
 var devBypass = devMode && app.Configuration.GetValue("Kella:DevOrg:Enabled", true);
