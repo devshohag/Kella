@@ -117,6 +117,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapAuthEndpoints();
 app.MapAgentEndpoints();
 app.MapDashboardEndpoints(requireAuth: !devBypass);
+app.MapWebhookEndpoints();
 
 app.Run();
 

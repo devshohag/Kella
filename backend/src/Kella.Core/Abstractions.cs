@@ -46,6 +46,12 @@ public interface IAlertChannel
     Task SendAsync(User recipient, AlertMessage message, CancellationToken ct);
 }
 
+/// <summary>Routes an incident to the organization's channels and records each delivery (SPEC §12).</summary>
+public interface IAlertRouter
+{
+    Task RouteAsync(Incident incident, CancellationToken ct);
+}
+
 public sealed record AiAnalysis(string WhatHappened, string Impact, IReadOnlyList<string> RecommendedActions, string CustomerNote, string Confidence);
 
 public interface IAiProvider

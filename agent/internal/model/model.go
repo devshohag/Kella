@@ -31,8 +31,9 @@ type EnrollRequest struct {
 }
 
 type EnrollResponse struct {
-	ServerID   string `json:"serverId"`
-	AgentToken string `json:"agentToken"`
+	ServerID         string `json:"serverId"`
+	AgentToken       string `json:"agentToken"`
+	CommandPublicKey string `json:"commandPublicKey"`
 }
 
 type Facts struct {
@@ -55,8 +56,11 @@ type CommandAck struct {
 
 // Event type names (SPEC §7). Never rename.
 const (
-	TypeHeartbeat      = "server.heartbeat"
-	TypeSSHAuthFailed  = "server.ssh_auth_failed"
-	TypeSSHAuthSuccess = "server.ssh_auth_succeeded"
-	TypeMailAuthFailed = "mail.auth_failed"
+	TypeHeartbeat        = "server.heartbeat"
+	TypeSSHAuthFailed    = "server.ssh_auth_failed"
+	TypeSSHAuthSuccess   = "server.ssh_auth_succeeded"
+	TypeMailAuthFailed   = "mail.auth_failed"
+	TypeMailAuthSuccess  = "mail.auth_succeeded"
+	TypeMailMessageQueue = "mail.message_queued"
+	TypeMailQueueSize    = "mail.queue_size"
 )

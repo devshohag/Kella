@@ -68,7 +68,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	start(a.commandLoop)
 	start(a.factsLoop)
 	start(func(ctx context.Context) { a.followLog(ctx, a.cfg.Logs.Auth, parsers.ParseAuthLine) })
-	// TODO(Phase 2): mail.log parser (Postfix/Dovecot) → mail.auth_failed, mail.message_queued.
+	start(func(ctx context.Context) { a.followLog(ctx, a.cfg.Logs.Mail, parsers.ParseMailLine) })
 
 	<-ctx.Done()
 	wg.Wait()
@@ -77,10 +77,16 @@ func (a *Agent) Run(ctx context.Context) error {
 
 func (a *Agent) ensureEnrolled(ctx context.Context) error {
 	if b, err := os.ReadFile(a.cfg.TokenPath); err == nil {
-		parts := strings.SplitN(strings.TrimSpace(string(b)), " ", 2)
-		if len(parts) == 2 {
+		parts := strings.SplitN(strings.TrimSpace(string(b)), " ", 3)
+		if len(parts) >= 2 {
 			a.serverID = parts[0]
 			a.api.SetToken(parts[1])
+			// If the token file has a third part (commandPublicKey), load it into the runner.
+			if len(parts) == 3 && parts[2] != "" {
+				if err := a.runner.SetPublicKey(parts[2]); err != nil {
+					slog.Warn("load commandPublicKey from token file", "err", err)
+				}
+			}
 			return nil
 		}
 	}
@@ -102,11 +108,21 @@ func (a *Agent) ensureEnrolled(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(a.cfg.TokenPath), 0o700); err != nil {
 		return fmt.Errorf("token dir: %w", err)
 	}
-	if err := os.WriteFile(a.cfg.TokenPath, []byte(res.ServerID+" "+res.AgentToken), 0o600); err != nil {
+	// Persist token file: "serverID agentToken commandPublicKey" (3 space-separated parts).
+	tokenData := res.ServerID + " " + res.AgentToken
+	if res.CommandPublicKey != "" {
+		tokenData += " " + res.CommandPublicKey
+	}
+	if err := os.WriteFile(a.cfg.TokenPath, []byte(tokenData), 0o600); err != nil {
 		return fmt.Errorf("save token: %w", err)
 	}
 	a.serverID = res.ServerID
 	a.api.SetToken(res.AgentToken)
+	if res.CommandPublicKey != "" {
+		if err := a.runner.SetPublicKey(res.CommandPublicKey); err != nil {
+			slog.Warn("set commandPublicKey from enroll response", "err", err)
+		}
+	}
 	slog.Info("enrolled", "serverId", res.ServerID)
 	return nil
 }

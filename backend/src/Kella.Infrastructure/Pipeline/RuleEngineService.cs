@@ -2,9 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Kella.Core;
-using Kella.Core.Actions;
 using Kella.Core.Domain;
 using Kella.Infrastructure.Data;
+using Kella.Infrastructure.Security;
 
 namespace Kella.Infrastructure.Pipeline;
 
@@ -43,6 +43,8 @@ public sealed class RuleEngineService(
         using var scope = scopes.CreateScope();
         scope.ServiceProvider.GetRequiredService<OrgContext>().Set(evt.OrganizationId);
         var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+        var signer = scope.ServiceProvider.GetRequiredService<CommandSigner>();
+        var router = scope.ServiceProvider.GetRequiredService<IAlertRouter>();
 
         var incident = new Incident
         {
@@ -90,16 +92,13 @@ public sealed class RuleEngineService(
 
             if (s.Mode == ActionMode.Auto)
             {
-                var payload = new AgentCommandPayload(
+                db.AgentCommands.Add(AgentCommands.Queue(
+                    signer,
+                    evt.ServerId,
+                    action.Id,
                     s.Kind,
-                    new Dictionary<string, string>(s.Params),
-                    DateTimeOffset.UtcNow.AddMinutes(10));
-                db.AgentCommands.Add(new AgentCommand
-                {
-                    ServerId = evt.ServerId,
-                    ActionId = action.Id,
-                    Payload = AgentCommandPayloadJson.Serialize(payload),
-                });
+                    s.Params,
+                    DateTimeOffset.UtcNow.AddMinutes(10)));
             }
         }
 
@@ -114,5 +113,8 @@ public sealed class RuleEngineService(
 
         await db.SaveChangesAsync(ct);
         log.LogInformation("INC-{Number} opened by {Rule}: {Title}", incident.Number, match.RuleCode, match.Title);
+
+        try { await router.RouteAsync(incident, ct); }
+        catch (Exception ex) { log.LogError(ex, "Routing alerts for INC-{Number} failed", incident.Number); }
     }
 }

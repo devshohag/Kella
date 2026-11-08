@@ -10,7 +10,7 @@ namespace Kella.Api.Endpoints;
 
 // ---- Contracts (SPEC §7, §8). Field names are an API contract with the Go agent. ----
 public sealed record EnrollRequest(string EnrollmentKey, string Hostname, string Os, int CpuCount, int RamMb, string? PublicIp, string AgentVersion);
-public sealed record EnrollResponse(Guid ServerId, string AgentToken);
+public sealed record EnrollResponse(Guid ServerId, string AgentToken, string CommandPublicKey);
 public sealed record FactsRequest(List<string> Detected, List<string> Guards);
 public sealed record AgentEventDto(string Id, DateTimeOffset Ts, string Module, string Type, string Severity, string? SourceIp, Dictionary<string, string>? Attrs);
 public sealed record EventBatch(string AgentVersion, Guid ServerId, DateTimeOffset SentAt, List<AgentEventDto> Events);
@@ -34,7 +34,7 @@ public static class AgentEndpoints
         authed.MapPost("/commands/{id:guid}/ack", AckCommandAsync);
     }
 
-    private static async Task<IResult> EnrollAsync(EnrollRequest req, KellaDbContext db, OrgContext org, CancellationToken ct)
+    private static async Task<IResult> EnrollAsync(EnrollRequest req, KellaDbContext db, OrgContext org, CommandSigner signer, CancellationToken ct)
     {
         var keyHash = Tokens.Hash(req.EnrollmentKey);
         // Enrollment arrives without an organization, so this single lookup bypasses the org filter.
@@ -67,7 +67,7 @@ public static class AgentEndpoints
             Verb = "server.enrolled", Target = $"server:{server.Id}",
         });
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new EnrollResponse(server.Id, token));
+        return Results.Ok(new EnrollResponse(server.Id, token, signer.PublicKeyBase64));
     }
 
     private static async Task<IResult> PutFactsAsync(FactsRequest req, HttpContext http, KellaDbContext db, CancellationToken ct)

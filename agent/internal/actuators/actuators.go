@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -66,6 +67,17 @@ func NewRunner(dryRun, requireSigned bool, pubKeyB64 string, allowlist []string,
 	return r, nil
 }
 
+// SetPublicKey decodes a base64-encoded Ed25519 public key and stores it on the runner.
+// Called from ensureEnrolled when the cloud returns a commandPublicKey.
+func (r *Runner) SetPublicKey(b64 string) error {
+	k, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil || len(k) != ed25519.PublicKeySize {
+		return fmt.Errorf("invalid commandPublicKey")
+	}
+	r.PublicKey = k
+	return nil
+}
+
 // Execute validates and runs one command. The returned string goes into the ack output.
 func (r *Runner) Execute(ctx context.Context, c model.Command) (string, error) {
 	if !c.ExpiresAt.IsZero() && r.Now().After(c.ExpiresAt) {
@@ -79,8 +91,12 @@ func (r *Runner) Execute(ctx context.Context, c model.Command) (string, error) {
 		return r.blockIP(ctx, c.Params["ip"], c.Params["ttlSec"])
 	case "unblock_ip":
 		return r.unblockIP(ctx, c.Params["ip"])
-	case "hold_sender", "release_sender", "cap_site_cpu", "run_check":
-		// TODO(Phase 2/3): implement per SPEC §8.5.
+	case "hold_sender":
+		return r.holdSender(ctx, c.Params["sender"])
+	case "release_sender":
+		return r.releaseSender(ctx, c.Params["sender"])
+	case "cap_site_cpu", "run_check":
+		// TODO(Phase 3): implement per SPEC §8.5.
 		return "", fmt.Errorf("%s not implemented yet", c.Kind)
 	default:
 		return "", ErrUnknownKind
@@ -88,7 +104,7 @@ func (r *Runner) Execute(ctx context.Context, c model.Command) (string, error) {
 }
 
 // CanonicalPayload is what the cloud signs: id|kind|expiresAt(RFC3339)|k1=v1&k2=v2 (keys sorted).
-// The backend must build the exact same string (TODO Phase 1: implement signing in Kella.Infrastructure).
+// The backend builds the same string in CommandSigner.CanonicalPayload (Kella.Infrastructure.Security).
 func CanonicalPayload(c model.Command) []byte {
 	keys := make([]string, 0, len(c.Params))
 	for k := range c.Params {
@@ -151,6 +167,39 @@ func (r *Runner) unblockIP(ctx context.Context, raw string) (string, error) {
 		set = "kella_block6"
 	}
 	return r.run(ctx, "nft", "delete", "element", "inet", "kella", set, fmt.Sprintf("{ %s }", ip.String()))
+}
+
+func (r *Runner) holdSender(ctx context.Context, sender string) (string, error) {
+	sender = strings.TrimSpace(sender)
+	if sender == "" || !strings.Contains(sender, "@") {
+		return "", fmt.Errorf("invalid sender email %q", sender)
+	}
+
+	// Postfix hold sender implementation (SPEC §8.5):
+	// Add HOLD to check_sender_access map, postmap, and postfix reload.
+	// We invoke standard helper script or postmap commands.
+	accessMap := "/etc/postfix/sender_access"
+	if out, err := r.run(ctx, "sh", "-c", fmt.Sprintf("echo '%s HOLD' >> %s && postmap %s && postfix reload", sender, accessMap, accessMap)); err != nil {
+		return out, fmt.Errorf("hold_sender: %w", err)
+	}
+	return "sender held", nil
+}
+
+func (r *Runner) releaseSender(ctx context.Context, sender string) (string, error) {
+	sender = strings.TrimSpace(sender)
+	if sender == "" || !strings.Contains(sender, "@") {
+		return "", fmt.Errorf("invalid sender email %q", sender)
+	}
+
+	// Postfix release sender implementation (SPEC §8.5):
+	// Remove from sender_access map, postmap, postfix reload, and release queued messages.
+	accessMap := "/etc/postfix/sender_access"
+	cmd := fmt.Sprintf("sed -i '/^%s /d' %s && postmap %s && postfix reload && (postqueue -p | grep -B 2 '%s' | awk '/^[0-9A-Z]/ {print $1}' | postsuper -H - || true)",
+		regexp.QuoteMeta(sender), accessMap, accessMap, regexp.QuoteMeta(sender))
+	if out, err := r.run(ctx, "sh", "-c", cmd); err != nil {
+		return out, fmt.Errorf("release_sender: %w", err)
+	}
+	return "sender released", nil
 }
 
 func (r *Runner) run(ctx context.Context, name string, args ...string) (string, error) {

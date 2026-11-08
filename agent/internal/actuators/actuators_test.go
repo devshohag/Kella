@@ -88,3 +88,33 @@ func TestSignatureRequired(t *testing.T) {
 		t.Fatalf("exactly one command should run, got %v", *calls)
 	}
 }
+
+func TestHoldAndReleaseSender(t *testing.T) {
+	r, calls := newTestRunner(t, false, "")
+	holdCmd := model.Command{
+		ID:        "c2",
+		Kind:      "hold_sender",
+		Params:    map[string]string{"sender": "spammer@badtenant.com"},
+		ExpiresAt: time.Now().Add(time.Minute),
+	}
+	if _, err := r.Execute(context.Background(), holdCmd); err != nil {
+		t.Fatalf("holdSender error: %v", err)
+	}
+	if len(*calls) != 1 || !strings.Contains((*calls)[0], "spammer@badtenant.com HOLD") {
+		t.Fatalf("unexpected call for hold: %v", *calls)
+	}
+
+	relCmd := model.Command{
+		ID:        "c3",
+		Kind:      "release_sender",
+		Params:    map[string]string{"sender": "spammer@badtenant.com"},
+		ExpiresAt: time.Now().Add(time.Minute),
+	}
+	if _, err := r.Execute(context.Background(), relCmd); err != nil {
+		t.Fatalf("releaseSender error: %v", err)
+	}
+	if len(*calls) != 2 || !strings.Contains((*calls)[1], "postsuper -H") {
+		t.Fatalf("unexpected call for release: %v", *calls)
+	}
+}
+

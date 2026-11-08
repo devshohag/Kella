@@ -37,6 +37,43 @@ public static class DashboardEndpoints
             (await db.Servers.OrderBy(s => s.Name).ToListAsync(ct))
                 .Select(s => new ServerListItem(s.Id, s.Name, s.PublicIp, s.Status.ToString(), s.Detected, s.Guards, s.LastSeenAt)));
 
+        g.MapGet("/servers/{id:guid}", async (Guid id, KellaDbContext db, CancellationToken ct) =>
+        {
+            var s = await db.Servers.FirstOrDefaultAsync(s => s.Id == id, ct);
+            return s is null ? Results.NotFound() : Results.Ok(new ServerListItem(s.Id, s.Name, s.PublicIp, s.Status.ToString(), s.Detected, s.Guards, s.LastSeenAt));
+        });
+
+        g.MapGet("/servers/{id:guid}/status-stream", async (Guid id, KellaDbContext db, HttpContext http, CancellationToken ct) =>
+        {
+            http.Response.Headers.ContentType = "text/event-stream";
+            http.Response.Headers.CacheControl = "no-cache";
+            http.Response.Headers.Connection = "keep-alive";
+
+            await http.Response.Body.FlushAsync(ct);
+
+            var deadline = DateTimeOffset.UtcNow.AddMinutes(5);
+            while (!ct.IsCancellationRequested && DateTimeOffset.UtcNow < deadline)
+            {
+                var s = await db.Servers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+                if (s is null) break;
+
+                // Emit status + detected services
+                var payload = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    status = s.Status.ToString(),
+                    detected = s.Detected,
+                    guards = s.Guards,
+                    lastSeenAt = s.LastSeenAt,
+                });
+                var line = $"data: {payload}\n\n";
+                await http.Response.WriteAsync(line, ct);
+                await http.Response.Body.FlushAsync(ct);
+
+                if (s.Status == ServerStatus.Online) break;
+                await Task.Delay(2000, ct);
+            }
+        });
+
         g.MapPost("/servers/enrollment-keys", async (KellaDbContext db, Infrastructure.OrgContext org, IConfiguration cfg, CancellationToken ct) =>
         {
             var key = Tokens.Create("kella_");
@@ -69,7 +106,7 @@ public static class DashboardEndpoints
             return Results.Ok(new { incident = ToListItem(inc), inc.Summary, findings, actions });
         });
 
-        g.MapPost("/actions/{id:guid}/approve", async (Guid id, KellaDbContext db, HttpContext http, CancellationToken ct) =>
+        g.MapPost("/actions/{id:guid}/approve", async (Guid id, KellaDbContext db, HttpContext http, CommandSigner signer, CancellationToken ct) =>
         {
             var action = await db.Actions.FirstOrDefaultAsync(a => a.Id == id, ct);
             if (action is null) return Results.NotFound();
@@ -78,16 +115,13 @@ public static class DashboardEndpoints
 
             action.Status = ActionStatus.Queued;
             action.ApprovedBy = http.User.FindFirst("sub")?.Value ?? "system";
-            var payload = new AgentCommandPayload(
+            db.AgentCommands.Add(AgentCommands.Queue(
+                signer,
+                action.ServerId,
+                action.Id,
                 action.Kind,
                 new Dictionary<string, string>(action.Params),
-                DateTimeOffset.UtcNow.AddMinutes(10));
-            db.AgentCommands.Add(new AgentCommand
-            {
-                ServerId = action.ServerId,
-                ActionId = action.Id,
-                Payload = AgentCommandPayloadJson.Serialize(payload),
-            });
+                DateTimeOffset.UtcNow.AddMinutes(10)));
             db.AuditLog.Add(new AuditEntry
             {
                 OrganizationId = action.OrganizationId, ActorType = "user", ActorId = action.ApprovedBy,

@@ -5,7 +5,7 @@ When the spec is ambiguous, add an entry here, pick the simplest reasonable opti
 | Date | Question | Decision taken | Status |
 |---|---|---|---|
 | 2026-11-08 | Product name and domain | Product name **Kella** (renamed from working name "Shield"; repo `github.com/devshohag/Kella`). Domain placeholder `kella.example`; trademark and domain clearance still to do. Keep brand strings in config. | Decided |
-| 2026-11-08 | Command signing key distribution to agents | Plan: return the cloud's Ed25519 public key in the enroll response and store it in agent.yaml. | Open |
+| 2026-11-08 | Command signing key distribution to agents | Implemented: `EnrollResponse.commandPublicKey` (base64 Ed25519 public key) returned by `POST /api/agent/enroll`; agent stores it as the 3rd field of the token file and calls `Runner.SetPublicKey` immediately so commands are verified without a restart. | Decided |
 | 2026-11-08 | `findings.rule_id` in SPEC §6 vs code-defined rules | Rules live in C# (`IRule.Code`); the `rules` table holds per-organization overrides. Findings store `rule_code text` instead of a foreign key, so no built-in row must exist before the first event. Spec line updated to match. | Decided |
 | 2026-11-08 | `events` partitioning granularity | SPEC §6 says "partitioned by day"; Phase 0 creates `events` with `PARTITION BY RANGE (ts)` plus an `events_default` partition. The retention job will add monthly partitions and drop old ones, so no empty daily partitions accumulate. | Decided |
 | 2026-11-08 | Login lockout counters have no column in SPEC §6 | Added `users.failed_login_count` and `users.lockout_until` (5 failures → 15-minute lockout) and updated the SPEC table line. | Decided |

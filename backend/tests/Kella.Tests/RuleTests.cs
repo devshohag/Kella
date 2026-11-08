@@ -66,4 +66,41 @@ public class RuleTests
         evt.SourceIp = null;
         Assert.Null(rule.Evaluate(evt));
     }
+
+    [Fact]
+    public void Mail_outbound_spike_fires_when_threshold_exceeded()
+    {
+        var rule = new MailOutboundSpikeRule(minSpikeCount: 5);
+        var t0 = DateTimeOffset.Parse("2026-11-08T02:00:00Z");
+
+        for (var i = 0; i < 4; i++)
+        {
+            var evt = new KellaEvent
+            {
+                OrganizationId = Guid.NewGuid(),
+                ServerId = Server,
+                Ts = t0.AddSeconds(i * 10),
+                Module = Modules.Mail,
+                Type = EventTypes.MailMessageQueued,
+                Attrs = new() { ["sender"] = "billing@rahmantraders.com" }
+            };
+            Assert.Null(rule.Evaluate(evt));
+        }
+
+        var spikeEvt = new KellaEvent
+        {
+            OrganizationId = Guid.NewGuid(),
+            ServerId = Server,
+            Ts = t0.AddSeconds(50),
+            Module = Modules.Mail,
+            Type = EventTypes.MailMessageQueued,
+            Attrs = new() { ["sender"] = "billing@rahmantraders.com" }
+        };
+
+        var match = rule.Evaluate(spikeEvt);
+        Assert.NotNull(match);
+        Assert.Equal("mail.outbound_spike", match.RuleCode);
+        Assert.Equal(Severity.Critical, match.Severity);
+        Assert.Contains(match.Actions, a => a.Kind == ActionKinds.HoldSender && a.Mode == ActionMode.Auto);
+    }
 }

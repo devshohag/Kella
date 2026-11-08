@@ -18,6 +18,7 @@ public class AgentApiTests(WebApplicationFactory<Program> factory) : IClassFixtu
         b.UseSetting("Kella:Jwt:Key", "kella-testing-only-signing-key-32b");
         b.UseSetting("Kella:Jwt:SecureCookies", "false");
         b.UseSetting("Kella:Seed:OwnerPassword", "test-owner-password");
+        b.UseSetting("Kella:Commands:PrivateKey", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="); // 32 zero bytes as base64 for testing only
     });
 
     private async Task<(HttpClient client, EnrollResponse enrolled)> EnrollAsync()

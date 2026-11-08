@@ -97,6 +97,7 @@ export const api = {
     request<AuthUser>('/api/auth/totp/enable', { method: 'POST', body: JSON.stringify({ setupToken, code }) }),
   overview: () => request<Overview>('/api/overview'),
   servers: () => request<ServerListItem[]>('/api/servers'),
+  server: (id: string) => request<ServerListItem>(`/api/servers/${id}`),
   createEnrollmentKey: () => request<EnrollmentKey>('/api/servers/enrollment-keys', { method: 'POST' }),
   incidents: (status?: IncidentStatus) => request<IncidentListItem[]>(`/api/incidents${status ? `?status=${status}` : ''}`),
   incident: (id: string) => request<IncidentDetail>(`/api/incidents/${id}`),

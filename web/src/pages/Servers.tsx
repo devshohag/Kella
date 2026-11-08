@@ -1,13 +1,103 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
-import { api, timeAgo, type EnrollmentKey } from '../api'
+import { useEffect, useRef, useState } from 'react'
+import { api, timeAgo, type EnrollmentKey, type ServerListItem } from '../api'
+import styles from './Servers.module.css'
 
-// SPEC §15 screen 6 (simplified). TODO(Phase 1): live detection steps for the server being added.
+type Step = { label: string; status: 'waiting' | 'done' | 'active' }
+
+function buildSteps(server: ServerListItem | null): Step[] {
+  if (!server) {
+    return [
+      { label: 'Waiting for agent to connect…', status: 'active' },
+      { label: 'Detecting services', status: 'waiting' },
+      { label: 'Turning on guards', status: 'waiting' },
+    ]
+  }
+  const online = server.status === 'Online'
+  const hasDetected = server.detected.length > 0
+  return [
+    { label: 'Agent connected', status: 'done' },
+    {
+      label: hasDetected
+        ? `Services found: ${server.detected.join(', ')}`
+        : 'Detecting services…',
+      status: online && hasDetected ? 'done' : online ? 'active' : 'waiting',
+    },
+    {
+      label:
+        server.guards.length > 0
+          ? `Guards on: ${server.guards.join(', ')}`
+          : 'Turning on guards…',
+      status: online && server.guards.length > 0 ? 'done' : online ? 'active' : 'waiting',
+    },
+  ]
+}
+
+function LiveDetection({ serverId }: { serverId: string }) {
+  const [server, setServer] = useState<ServerListItem | null>(null)
+  const [done, setDone] = useState(false)
+  const esRef = useRef<EventSource | null>(null)
+
+  useEffect(() => {
+    const es = new EventSource(`/api/servers/${serverId}/status-stream`)
+    esRef.current = es
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data) as ServerListItem
+        setServer(data)
+        if (data.status === 'Online') {
+          setDone(true)
+          es.close()
+        }
+      } catch { /* ignore */ }
+    }
+    es.onerror = () => { es.close(); setDone(true) }
+    return () => es.close()
+  }, [serverId])
+
+  const steps = buildSteps(done ? server : server)
+
+  return (
+    <div className={styles.detection}>
+      <div className={styles.detectionTitle}>
+        {done ? '✅ Server is online' : '⏳ Setting up…'}
+      </div>
+      <ul className={styles.steps}>
+        {steps.map((s, i) => (
+          <li key={i} className={styles[s.status]}>
+            <span className={styles.dot} />
+            {s.label}
+          </li>
+        ))}
+      </ul>
+      {done && server && (
+        <div className={styles.detectionResult}>
+          <span className="pill ok">{server.status}</span>
+          {server.detected.map((d) => <span key={d} className="chip">{d}</span>)}
+          {server.guards.map((g) => <span key={g} className="chip guard">{g}</span>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Servers() {
   const servers = useQuery({ queryKey: ['servers'], queryFn: api.servers, refetchInterval: 5_000 })
   const [key, setKey] = useState<EnrollmentKey | null>(null)
   const [copied, setCopied] = useState(false)
-  const create = useMutation({ mutationFn: api.createEnrollmentKey, onSuccess: (k) => { setKey(k); setCopied(false) } })
+  const [watchId, setWatchId] = useState<string | null>(null)
+  const create = useMutation({
+    mutationFn: api.createEnrollmentKey,
+    onSuccess: (k) => { setKey(k); setCopied(false); setWatchId(null) },
+  })
+
+  // when a new server appears that matches our pending key, start watching it
+  useEffect(() => {
+    if (!key || watchId) return
+    // find newest server not yet watched — just take the first pending/online one
+    const newest = servers.data?.find((s) => s.status === 'Pending' || s.status === 'Online')
+    if (newest) setWatchId(newest.id)
+  }, [key, servers.data, watchId])
 
   return (
     <div className="page">
@@ -25,11 +115,19 @@ export function Servers() {
         </div>
         {create.error && <div className="error">Could not create a key: {create.error.message}</div>}
         {key ? (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'var(--rail)', color: '#E3EAF3', borderRadius: 10, padding: '14px 18px' }}>
-            <code className="mono" style={{ flex: 1, overflowX: 'auto', whiteSpace: 'nowrap' }}>{key.installCommand}</code>
-            <button className="btn" onClick={() => { navigator.clipboard.writeText(key.installCommand); setCopied(true) }}>
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+          <div className={styles.installBlock}>
+            <div className={styles.installCmd}>
+              <code className="mono">{key.installCommand}</code>
+              <button className="btn" onClick={() => { navigator.clipboard.writeText(key.installCommand); setCopied(true) }}>
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <div className="cap">Expires {new Date(key.expiresAt).toLocaleString()} · one use only</div>
+            {watchId ? (
+              <LiveDetection serverId={watchId} />
+            ) : (
+              <div className="cap" style={{ marginTop: 12 }}>Waiting for the agent to connect…</div>
+            )}
           </div>
         ) : (
           <div className="cap">The command works once and expires in 24 hours.</div>

@@ -5,6 +5,7 @@ using Kella.Core;
 using Kella.Core.Rules;
 using Kella.Infrastructure.Data;
 using Kella.Infrastructure.Pipeline;
+using Kella.Infrastructure.Security;
 
 namespace Kella.Infrastructure;
 
@@ -27,10 +28,13 @@ public static class DependencyInjection
         });
 
         services.AddSingleton<IEventBus, InProcessEventBus>();
+        services.AddSingleton<CommandSigner>();
 
         // Built-in rules (SPEC §9). Add new rules here.
         services.AddSingleton<IRule, SshBruteForceRule>();
         services.AddSingleton<IRule, MailBruteForceIpRule>();
+        services.AddSingleton<IRule, MailOutboundSpikeRule>();
+        services.AddSingleton<IRule, MailAccountTakeoverRule>();
         return services;
     }
 
@@ -38,6 +42,7 @@ public static class DependencyInjection
     public static IServiceCollection AddKellaPipeline(this IServiceCollection services)
     {
         services.AddHostedService<RuleEngineService>();
+        services.AddHostedService<IpReputationService>();
         return services;
     }
 }

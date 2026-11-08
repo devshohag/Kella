@@ -1,0 +1,7 @@
+Nov  8 02:14:01 mail-01 dovecot: imap-login: Disconnected: Connection closed: auth failed, method=PLAIN, user=<billing@rahmantraders.com>, rip=45.148.10.92, lip=192.168.1.10
+Nov  8 02:14:05 mail-01 dovecot: pop3-login: Aborted login: auth failed, method=PLAIN, user=<info@example.com>, rip=185.220.101.5, lip=192.168.1.10
+Nov  8 02:14:10 mail-01 dovecot: imap-login: Login: user=<sales@acme.com>, method=PLAIN, rip=203.0.113.15, lip=192.168.1.10, mpid=12345, TLS
+Nov  8 02:15:00 mail-01 postfix/qmgr[2345]: 4Sxyz91234z: from=<spammer@badtenant.com>, size=4521, nrcpt=50 (queue active)
+Nov  8 02:15:02 mail-01 postfix/cleanup[2346]: 4Sxyz95678z: message-id=<20261108021502.1234@mail.badtenant.com>
+Nov  8 02:15:03 mail-01 postfix/qmgr[2345]: 4Sxyz95678z: from=<billing@rahmantraders.com>, size=1240, nrcpt=1 (queue active)
+Nov  8 02:16:00 mail-01 postfix/smtp[2350]: 4Sxyz91234z: to=<victim1@other.com>, relay=mx.other.com[93.184.216.34]:25, status=sent
