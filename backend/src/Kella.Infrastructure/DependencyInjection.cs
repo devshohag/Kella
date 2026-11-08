@@ -29,6 +29,9 @@ public static class DependencyInjection
 
         services.AddSingleton<IEventBus, InProcessEventBus>();
         services.AddSingleton<CommandSigner>();
+        services.AddScoped<IAlertRouter, Alerting.AlertRouter>();
+        services.AddSingleton(sp => Alerting.AlertSettings.Telegram(sp.GetRequiredService<IConfiguration>()));
+        services.AddSingleton<IAlertChannel, Alerting.TelegramAlertChannel>();
 
         // Built-in rules (SPEC §9). Add new rules here.
         services.AddSingleton<IRule, SshBruteForceRule>();

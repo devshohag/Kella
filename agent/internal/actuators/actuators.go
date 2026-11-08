@@ -2,13 +2,17 @@
 package actuators
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -23,6 +27,10 @@ var (
 	ErrExpired     = errors.New("command expired")
 	ErrUnknownKind = errors.New("unknown command kind")
 	ErrAllowlisted = errors.New("ip is allowlisted")
+	ErrInvalidSender = errors.New("invalid sender email address")
+
+	// strictEmail matches standard mailbox addresses without quotes, backticks, spaces, or shell metacharacters
+	strictEmail = regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$`)
 )
 
 type Runner struct {
@@ -32,11 +40,18 @@ type Runner struct {
 	allow         []*net.IPNet
 	Exec          func(ctx context.Context, name string, args ...string) (string, error)
 	Now           func() time.Time
+	SenderAccessPath string // default "/etc/postfix/sender_access"
 }
 
 // NewRunner builds a runner. cloudHost is always allowlisted so the agent never cuts itself off.
 func NewRunner(dryRun, requireSigned bool, pubKeyB64 string, allowlist []string, cloudHost string) (*Runner, error) {
-	r := &Runner{DryRun: dryRun, RequireSigned: requireSigned, Exec: runCmd, Now: time.Now}
+	r := &Runner{
+		DryRun:        dryRun,
+		RequireSigned: requireSigned,
+		Exec:          runCmd,
+		Now:           time.Now,
+		SenderAccessPath: "/etc/postfix/sender_access",
+	}
 	if pubKeyB64 != "" {
 		k, err := base64.StdEncoding.DecodeString(pubKeyB64)
 		if err != nil || len(k) != ed25519.PublicKeySize {
@@ -68,7 +83,6 @@ func NewRunner(dryRun, requireSigned bool, pubKeyB64 string, allowlist []string,
 }
 
 // SetPublicKey decodes a base64-encoded Ed25519 public key and stores it on the runner.
-// Called from ensureEnrolled when the cloud returns a commandPublicKey.
 func (r *Runner) SetPublicKey(b64 string) error {
 	k, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil || len(k) != ed25519.PublicKeySize {
@@ -104,7 +118,6 @@ func (r *Runner) Execute(ctx context.Context, c model.Command) (string, error) {
 }
 
 // CanonicalPayload is what the cloud signs: id|kind|expiresAt(RFC3339)|k1=v1&k2=v2 (keys sorted).
-// The backend builds the same string in CommandSigner.CanonicalPayload (Kella.Infrastructure.Security).
 func CanonicalPayload(c model.Command) []byte {
 	keys := make([]string, 0, len(c.Params))
 	for k := range c.Params {
@@ -169,36 +182,144 @@ func (r *Runner) unblockIP(ctx context.Context, raw string) (string, error) {
 	return r.run(ctx, "nft", "delete", "element", "inet", "kella", set, fmt.Sprintf("{ %s }", ip.String()))
 }
 
-func (r *Runner) holdSender(ctx context.Context, sender string) (string, error) {
+// validateSender checks against shell injection and invalid email formats.
+func validateSender(sender string) (string, error) {
 	sender = strings.TrimSpace(sender)
-	if sender == "" || !strings.Contains(sender, "@") {
-		return "", fmt.Errorf("invalid sender email %q", sender)
+	if sender == "" || len(sender) > 254 {
+		return "", ErrInvalidSender
+	}
+	// Prohibit any dangerous characters
+	if strings.ContainsAny(sender, " \t\r\n'\"`;$|&><()\\") {
+		return "", ErrInvalidSender
+	}
+	if !strictEmail.MatchString(sender) {
+		return "", ErrInvalidSender
+	}
+	return strings.ToLower(sender), nil
+}
+
+// holdSender adds the sender to Postfix check_sender_access map with HOLD action (SPEC §8.5).
+// Idempotent: if sender already present, skips writing and re-syncing.
+func (r *Runner) holdSender(ctx context.Context, rawSender string) (string, error) {
+	sender, err := validateSender(rawSender)
+	if err != nil {
+		return "", err
 	}
 
-	// Postfix hold sender implementation (SPEC §8.5):
-	// Add HOLD to check_sender_access map, postmap, and postfix reload.
-	// We invoke standard helper script or postmap commands.
-	accessMap := "/etc/postfix/sender_access"
-	if out, err := r.run(ctx, "sh", "-c", fmt.Sprintf("echo '%s HOLD' >> %s && postmap %s && postfix reload", sender, accessMap, accessMap)); err != nil {
-		return out, fmt.Errorf("hold_sender: %w", err)
+	accessPath := r.SenderAccessPath
+	if accessPath == "" {
+		accessPath = "/etc/postfix/sender_access"
 	}
+
+	// Read existing file if present
+	var lines []string
+	alreadyHeld := false
+	if data, readErr := os.ReadFile(accessPath); readErr == nil {
+		sc := bufio.NewScanner(bytes.NewReader(data))
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				lines = append(lines, sc.Text())
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) >= 2 && strings.EqualFold(parts[0], sender) && strings.ToUpper(parts[1]) == "HOLD" {
+				alreadyHeld = true
+			}
+			lines = append(lines, sc.Text())
+		}
+	}
+
+	if alreadyHeld {
+		return "already held", nil
+	}
+
+	lines = append(lines, fmt.Sprintf("%s HOLD", sender))
+	outContent := strings.Join(lines, "\n") + "\n"
+
+	if !r.DryRun {
+		if writeErr := os.WriteFile(accessPath, []byte(outContent), 0644); writeErr != nil {
+			return "", fmt.Errorf("write sender_access: %w", writeErr)
+		}
+	}
+
+	if _, err := r.run(ctx, "postmap", accessPath); err != nil {
+		return "", fmt.Errorf("postmap: %w", err)
+	}
+	if _, err := r.run(ctx, "postfix", "reload"); err != nil {
+		return "", fmt.Errorf("postfix reload: %w", err)
+	}
+
 	return "sender held", nil
 }
 
-func (r *Runner) releaseSender(ctx context.Context, sender string) (string, error) {
-	sender = strings.TrimSpace(sender)
-	if sender == "" || !strings.Contains(sender, "@") {
-		return "", fmt.Errorf("invalid sender email %q", sender)
+type postqueueItem struct {
+	QueueID string `json:"queue_id"`
+	Sender  string `json:"sender"`
+}
+
+// releaseSender removes sender from check_sender_access map and releases held messages via postsuper -H (SPEC §8.5).
+func (r *Runner) releaseSender(ctx context.Context, rawSender string) (string, error) {
+	sender, err := validateSender(rawSender)
+	if err != nil {
+		return "", err
 	}
 
-	// Postfix release sender implementation (SPEC §8.5):
-	// Remove from sender_access map, postmap, postfix reload, and release queued messages.
-	accessMap := "/etc/postfix/sender_access"
-	cmd := fmt.Sprintf("sed -i '/^%s /d' %s && postmap %s && postfix reload && (postqueue -p | grep -B 2 '%s' | awk '/^[0-9A-Z]/ {print $1}' | postsuper -H - || true)",
-		regexp.QuoteMeta(sender), accessMap, accessMap, regexp.QuoteMeta(sender))
-	if out, err := r.run(ctx, "sh", "-c", cmd); err != nil {
-		return out, fmt.Errorf("release_sender: %w", err)
+	accessPath := r.SenderAccessPath
+	if accessPath == "" {
+		accessPath = "/etc/postfix/sender_access"
 	}
+
+	changed := false
+	var newLines []string
+	if data, readErr := os.ReadFile(accessPath); readErr == nil {
+		sc := bufio.NewScanner(bytes.NewReader(data))
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				newLines = append(newLines, sc.Text())
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) >= 1 && strings.EqualFold(parts[0], sender) {
+				changed = true
+				continue // remove this line
+			}
+			newLines = append(newLines, sc.Text())
+		}
+	}
+
+	if changed && !r.DryRun {
+		outContent := ""
+		if len(newLines) > 0 {
+			outContent = strings.Join(newLines, "\n") + "\n"
+		}
+		if writeErr := os.WriteFile(accessPath, []byte(outContent), 0644); writeErr != nil {
+			return "", fmt.Errorf("write sender_access: %w", writeErr)
+		}
+		if _, err := r.run(ctx, "postmap", accessPath); err != nil {
+			return "", fmt.Errorf("postmap: %w", err)
+		}
+		if _, err := r.run(ctx, "postfix", "reload"); err != nil {
+			return "", fmt.Errorf("postfix reload: %w", err)
+		}
+	}
+
+	// Release queued messages matching exact sender using postqueue -j
+	rawJSON, qErr := r.run(ctx, "postqueue", "-j")
+	if qErr == nil && rawJSON != "" {
+		dec := json.NewDecoder(strings.NewReader(rawJSON))
+		for dec.More() {
+			var item postqueueItem
+			if err := dec.Decode(&item); err == nil {
+				if strings.EqualFold(item.Sender, sender) && item.QueueID != "" {
+					cleanID := strings.TrimRight(item.QueueID, "*!")
+					_, _ = r.run(ctx, "postsuper", "-H", cleanID)
+				}
+			}
+		}
+	}
+
 	return "sender released", nil
 }
 

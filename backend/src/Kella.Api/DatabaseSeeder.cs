@@ -117,7 +117,8 @@ public static class DatabaseSeeder
         {
             var isDevRequest = ctx.Request.Path.StartsWithSegments("/api")
                 && !ctx.Request.Path.StartsWithSegments("/api/agent")
-                && !ctx.Request.Path.StartsWithSegments("/api/auth");
+                && !ctx.Request.Path.StartsWithSegments("/api/auth")
+                && !ctx.Request.Path.StartsWithSegments("/api/hooks");
             if (isDevRequest && ctx.User.Identity?.IsAuthenticated != true)
             {
                 var state = ctx.RequestServices.GetRequiredService<DevOrgState>();
