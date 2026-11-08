@@ -349,6 +349,12 @@ namespace Kella.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("AcknowledgedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AcknowledgedBy")
+                        .HasColumnType("text");
+
                     b.Property<string>("AiAnalysisJson")
                         .HasColumnType("jsonb");
 
@@ -639,6 +645,19 @@ namespace Kella.Infrastructure.Migrations
                     b.HasIndex("KeyHash");
 
                     b.ToTable("servers", (string)null);
+                });
+
+            modelBuilder.Entity("Kella.Core.Domain.TelegramUpdate", b =>
+                {
+                    b.Property<long>("UpdateId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UpdateId");
+
+                    b.ToTable("telegram_updates", (string)null);
                 });
 
             modelBuilder.Entity("Kella.Core.Domain.Tenant", b =>

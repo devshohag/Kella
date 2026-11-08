@@ -29,6 +29,7 @@ public sealed class KellaDbContext(DbContextOptions<KellaDbContext> options, IOr
     public DbSet<AlertDelivery> AlertDeliveries => Set<AlertDelivery>();
     public DbSet<Baseline> Baselines => Set<Baseline>();
     public DbSet<AuditEntry> AuditLog => Set<AuditEntry>();
+    public DbSet<TelegramUpdate> TelegramUpdates => Set<TelegramUpdate>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -80,6 +81,9 @@ public sealed class KellaDbContext(DbContextOptions<KellaDbContext> options, IOr
 
         b.Entity<AuditEntry>().ToTable("audit_log").HasIndex(x => new { x.OrganizationId, x.Ts });
         b.Entity<AuditEntry>().Property(x => x.DataJson).HasColumnType("jsonb");
+
+        b.Entity<TelegramUpdate>().ToTable("telegram_updates").HasKey(x => x.UpdateId);
+        b.Entity<TelegramUpdate>().Property(x => x.UpdateId).ValueGeneratedNever();
 
         foreach (var type in b.Model.GetEntityTypes().Where(t => typeof(IOrgScoped).IsAssignableFrom(t.ClrType)))
         {

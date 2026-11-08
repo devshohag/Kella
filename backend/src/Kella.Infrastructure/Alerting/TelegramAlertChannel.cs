@@ -52,6 +52,27 @@ public sealed class TelegramAlertChannel : IAlertChannel, IDisposable
             throw new HttpRequestException("Telegram rejected the message.");
     }
 
+    public async Task SendMessageAsync(string chatId, string text, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_options.BotToken))
+            return; // When bot token is not configured (e.g. dev/test), do not fail
+
+        var url = $"{_options.ApiBase.TrimEnd('/')}/bot{_options.BotToken}/sendMessage";
+        var body = new Dictionary<string, object>
+        {
+            ["chat_id"] = chatId,
+            ["text"] = text,
+            ["disable_web_page_preview"] = true,
+        };
+
+        using var response = await _http.PostAsJsonAsync(url, body, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var detail = await response.Content.ReadAsStringAsync(ct);
+            throw new HttpRequestException($"Telegram returned {(int)response.StatusCode}: {Truncate(detail, 300)}");
+        }
+    }
+
     public static string Format(AlertMessage message)
     {
         var icon = message.Severity switch

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Kella.Core.Domain;
 using Kella.Infrastructure;
+using Kella.Infrastructure.Alerting;
 using Kella.Infrastructure.Data;
 using Kella.Infrastructure.Security;
 
@@ -24,6 +25,7 @@ public static class WebhookEndpoints
             KellaDbContext db,
             OrgContext org,
             CommandSigner signer,
+            TelegramAlertChannel telegram,
             IConfiguration config,
             IHostEnvironment env,
             ILoggerFactory loggerFactory,
@@ -58,6 +60,24 @@ public static class WebhookEndpoints
 
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
+
+            // Idempotency: repeated update_id does nothing
+            if (root.TryGetProperty("update_id", out var updateIdElem) && updateIdElem.TryGetInt64(out var updateId))
+            {
+                var alreadyProcessed = await db.TelegramUpdates.AnyAsync(u => u.UpdateId == updateId, ct);
+                if (alreadyProcessed)
+                    return Results.Ok();
+
+                db.TelegramUpdates.Add(new TelegramUpdate { UpdateId = updateId, ProcessedAt = DateTimeOffset.UtcNow });
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateException)
+                {
+                    return Results.Ok();
+                }
+            }
 
             if (!root.TryGetProperty("message", out var msg))
                 return Results.Ok();
@@ -97,32 +117,22 @@ public static class WebhookEndpoints
             // Handle reply commands (SPEC §12): "1", "2", "ack", "status"
             if (int.TryParse(text, out var optionNumber) && optionNumber >= 1)
             {
-                // Must map to the pending actions of the incident the replied-to alert belongs to
-                var query = db.Actions.Where(a => a.Status == ActionStatus.PendingApproval && a.ExpiresAt > DateTimeOffset.UtcNow);
-                if (targetIncident != null)
+                if (targetIncident == null)
                 {
-                    query = query.Where(a => a.IncidentId == targetIncident.Id);
-                }
-                else
-                {
-                    // Fallback to latest open incident with pending actions
-                    var latestIncidentId = await db.Incidents
-                        .Where(i => i.Status != IncidentStatus.Resolved)
-                        .OrderByDescending(i => i.OpenedAt)
-                        .Select(i => i.Id)
-                        .FirstOrDefaultAsync(ct);
-
-                    if (latestIncidentId != Guid.Empty)
-                        query = query.Where(a => a.IncidentId == latestIncidentId);
+                    await telegram.SendMessageAsync(chatId, "Reply to an alert message to approve.", ct);
+                    return Results.Ok();
                 }
 
-                var pendingAction = await query
+                // Map option N to the Nth pending action of that incident ordered by (CreatedAt, Id)
+                var pendingActions = await db.Actions
+                    .Where(a => a.IncidentId == targetIncident.Id && a.Status == ActionStatus.PendingApproval && a.ExpiresAt > DateTimeOffset.UtcNow)
                     .OrderBy(a => a.CreatedAt)
-                    .Skip(optionNumber - 1)
-                    .FirstOrDefaultAsync(ct);
+                    .ThenBy(a => a.Id)
+                    .ToListAsync(ct);
 
-                if (pendingAction != null)
+                if (optionNumber <= pendingActions.Count)
                 {
+                    var pendingAction = pendingActions[optionNumber - 1];
                     pendingAction.Status = ActionStatus.Queued;
                     pendingAction.ApprovedBy = $"telegram:{user.Email}";
 
@@ -152,48 +162,66 @@ public static class WebhookEndpoints
                     });
 
                     await db.SaveChangesAsync(ct);
+                    await telegram.SendMessageAsync(chatId, $"Approved action {optionNumber} for INC-{targetIncident.Number}.", ct);
                 }
             }
             else if (text.Equals("ack", StringComparison.OrdinalIgnoreCase))
             {
-                // Acknowledge incident
-                if (targetIncident != null)
+                if (targetIncident == null)
                 {
-                    db.AuditLog.Add(new AuditEntry
-                    {
-                        OrganizationId = targetIncident.OrganizationId,
-                        ActorType = "user",
-                        ActorId = user.Id.ToString(),
-                        Verb = "incident.acknowledged",
-                        Target = $"incident:{targetIncident.Id}",
-                        DataJson = JsonSerializer.Serialize(new
-                        {
-                            source = "telegram",
-                            chatId,
-                            user = user.Email
-                        })
-                    });
-                    await db.SaveChangesAsync(ct);
+                    await telegram.SendMessageAsync(chatId, "Reply to an alert message to acknowledge.", ct);
+                    return Results.Ok();
                 }
+
+                targetIncident.AcknowledgedAt = DateTimeOffset.UtcNow;
+                targetIncident.AcknowledgedBy = $"telegram:{user.Email}";
+
+                db.AuditLog.Add(new AuditEntry
+                {
+                    OrganizationId = targetIncident.OrganizationId,
+                    ActorType = "user",
+                    ActorId = user.Id.ToString(),
+                    Verb = "incident.acknowledged",
+                    Target = $"incident:{targetIncident.Id}",
+                    DataJson = JsonSerializer.Serialize(new
+                    {
+                        source = "telegram",
+                        chatId,
+                        user = user.Email,
+                        incident_number = targetIncident.Number
+                    })
+                });
+
+                await db.SaveChangesAsync(ct);
+                await telegram.SendMessageAsync(chatId, $"Acknowledged INC-{targetIncident.Number}", ct);
             }
             else if (text.Equals("status", StringComparison.OrdinalIgnoreCase))
             {
-                // status command requested; log audit entry
+                if (targetIncident == null)
+                {
+                    await telegram.SendMessageAsync(chatId, "Reply to an alert message to view status.", ct);
+                    return Results.Ok();
+                }
+
                 db.AuditLog.Add(new AuditEntry
                 {
                     OrganizationId = user.OrganizationId,
                     ActorType = "user",
                     ActorId = user.Id.ToString(),
                     Verb = "incident.status_queried",
-                    Target = targetIncident != null ? $"incident:{targetIncident.Id}" : "org",
+                    Target = $"incident:{targetIncident.Id}",
                     DataJson = JsonSerializer.Serialize(new
                     {
                         source = "telegram",
                         chatId,
-                        user = user.Email
+                        user = user.Email,
+                        incident_number = targetIncident.Number
                     })
                 });
                 await db.SaveChangesAsync(ct);
+
+                var statusSummary = $"INC-{targetIncident.Number}: {targetIncident.Title}\nStatus: {targetIncident.Status}\nSeverity: {targetIncident.Severity}\n{targetIncident.Summary}";
+                await telegram.SendMessageAsync(chatId, statusSummary, ct);
             }
 
             return Results.Ok();

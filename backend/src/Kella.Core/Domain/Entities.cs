@@ -123,6 +123,8 @@ public sealed class Incident : Entity, IOrgScoped
     public DateTimeOffset OpenedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ContainedAt { get; set; }
     public DateTimeOffset? ResolvedAt { get; set; }
+    public DateTimeOffset? AcknowledgedAt { get; set; }
+    public string? AcknowledgedBy { get; set; }
     public string? AiAnalysisJson { get; set; }
 }
 
@@ -225,4 +227,10 @@ public sealed class AuditEntry : IOrgScoped
     public required string Target { get; set; }
     public string? DataJson { get; set; }
     public DateTimeOffset Ts { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class TelegramUpdate
+{
+    public long UpdateId { get; set; }
+    public DateTimeOffset ProcessedAt { get; set; } = DateTimeOffset.UtcNow;
 }
