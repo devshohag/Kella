@@ -1,0 +1,13 @@
+# .NET
+bin/
+obj/
+*.user
+# Go
+agent/shield-agent
+agent/.dev/
+# Web
+node_modules/
+web/dist/
+# Misc
+.env
+.DS_Store

@@ -1,0 +1,15 @@
+.shell { display: flex; min-height: 100%; }
+.rail { width: 224px; flex: none; background: var(--rail); color: var(--rail-ink); padding: 22px 14px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; color: #fff; font-weight: 600; font-size: 18px; }
+.item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 7px; color: var(--rail-ink); text-decoration: none; margin-bottom: 2px; }
+.item:hover { color: #fff; }
+.active { background: var(--rail-active); color: #fff; }
+.soon { margin-left: auto; font-size: 11px; color: #6F819A; }
+.group { font-size: 12px; color: #6F819A; padding: 16px 12px 6px; }
+.rule { border: 0; border-top: 1px solid #243A57; margin: 12px 8px; }
+.main { flex: 1; min-width: 0; }
+
+@media (max-width: 800px) {
+  .shell { flex-direction: column; }
+  .rail { width: auto; }
+}

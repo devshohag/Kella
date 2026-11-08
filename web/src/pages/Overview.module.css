@@ -1,0 +1,4 @@
+.status { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.title { flex: 1; min-width: 280px; }
+.stat { padding-left: 18px; border-left: 1px solid var(--line); }
+.value { font-size: 30px; line-height: 1; }

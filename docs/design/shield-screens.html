@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shield — product screens</title>
+<style>
+@font-face{font-family:Plex;font-weight:400;src:url(fonts/plex-400.woff2)}
+@font-face{font-family:Plex;font-weight:500;src:url(fonts/plex-500.woff2)}
+@font-face{font-family:Plex;font-weight:600;src:url(fonts/plex-600.woff2)}
+@font-face{font-family:Plex;font-weight:700;src:url(fonts/plex-700.woff2)}
+@font-face{font-family:PlexCond;font-weight:500;src:url(fonts/cond-500.woff2)}
+@font-face{font-family:PlexCond;font-weight:600;src:url(fonts/cond-600.woff2)}
+@font-face{font-family:PlexMono;font-weight:400;src:url(fonts/mono-400.woff2)}
+@font-face{font-family:PlexMono;font-weight:500;src:url(fonts/mono-500.woff2)}
+
+:root{
+  --canvas:#E9EDF1; --surface:#FFFFFF; --ink:#0E1A2B; --muted:#5B6778; --faint:#8A95A4;
+  --line:#D6DDE5; --rail:#13233A; --rail-ink:#AEBBCD;
+  --crit:#D7263D; --warn:#E08A0B; --ok:#1C9C74; --info:#2F5BEA;
+  --crit-bg:#FBE9EB; --warn-bg:#FDF2E1; --ok-bg:#E4F4EE; --info-bg:#E8EEFD;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#C9D1DA}
+body{font-family:Plex,sans-serif;color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+@page{size:1600px 1000px;margin:0}
+.page{width:1600px;height:1000px;display:flex;background:var(--canvas);overflow:hidden;page-break-after:always;position:relative}
+.mono{font-family:PlexMono,monospace}
+.num{font-family:PlexCond,sans-serif;font-weight:600;letter-spacing:-.01em}
+
+/* rail */
+.rail{width:224px;background:var(--rail);color:var(--rail-ink);padding:22px 14px;display:flex;flex-direction:column;flex:none}
+.brand{display:flex;align-items:center;gap:10px;padding:0 8px 22px;color:#fff;font-weight:600;font-size:18px}
+.org{margin:0 4px 18px;padding:10px 12px;border:1px solid #2A3D57;border-radius:8px;font-size:12.5px}
+.org b{display:block;color:#fff;font-weight:500;font-size:13.5px}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;color:var(--rail-ink);text-decoration:none;font-size:14px;margin-bottom:2px}
+.nav a.on{background:#22385A;color:#fff}
+.nav a .cnt{margin-left:auto;background:var(--crit);color:#fff;font-size:11.5px;border-radius:10px;padding:0 7px;font-weight:600}
+.nav hr{border:0;border-top:1px solid #243A57;margin:12px 8px}
+.nav .grp{font-size:12px;color:#6F819A;padding:4px 12px 6px}
+.ico{width:16px;height:16px;flex:none}
+.rail .foot{margin-top:auto;font-size:12px;padding:12px;border-top:1px solid #243A57;color:#7F92AB}
+.rail .foot span{color:#fff}
+
+/* main */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:64px;display:flex;align-items:center;padding:0 32px;gap:16px;border-bottom:1px solid var(--line);background:#F4F6F8}
+.crumb{color:var(--muted);font-size:13.5px}
+.crumb b{color:var(--ink);font-weight:500}
+.search{margin-left:auto;width:320px;height:36px;border:1px solid var(--line);border-radius:8px;background:#fff;display:flex;align-items:center;padding:0 12px;color:var(--faint);font-size:13.5px;gap:8px}
+.avatar{width:34px;height:34px;border-radius:50%;background:#C8D3E0;display:grid;place-items:center;font-weight:600;font-size:13px;color:var(--ink)}
+.body{padding:26px 32px;flex:1;display:flex;flex-direction:column;gap:20px;min-height:0}
+h1{font-size:26px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+h2{font-size:15.5px;font-weight:600}
+.sub{color:var(--muted);font-size:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.row{display:flex;gap:20px;min-height:0}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.pill.crit{background:var(--crit-bg);color:#A3162A}.pill.warn{background:var(--warn-bg);color:#93590A}
+.pill.ok{background:var(--ok-bg);color:#11704F}.pill.info{background:var(--info-bg);color:#2140B0}
+.pill.grey{background:#EEF1F4;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 16px;border-radius:8px;font-weight:500;font-size:13.5px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.btn.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.danger{background:var(--crit);color:#fff;border-color:var(--crit)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:12.5px;padding:0 10px 9px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid #EDF0F3;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+th:first-child,td:first-child{padding-left:0}
+.chip{display:inline-block;font-size:12px;padding:2px 8px;border-radius:5px;background:#EEF1F5;color:#3A4757;margin-right:4px;font-weight:500}
+.chip.g{background:var(--info-bg);color:#2140B0}
+.bar{height:6px;border-radius:3px;background:#E8ECF0;overflow:hidden;width:84px;display:inline-block;vertical-align:middle;margin-right:8px}
+.bar i{display:block;height:100%;border-radius:3px}
+.kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #EDF0F3;font-size:13.5px}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--muted)}
+
+/* page 1 */
+.status-line{display:flex;align-items:flex-end;gap:24px}
+.status-line .stat{padding-left:18px;border-left:1px solid var(--line)}
+.status-line .stat .num{font-size:30px;line-height:1}
+.status-line .stat div{font-size:13px;color:var(--muted);margin-top:4px}
+.grid-wrap{flex:1.55}
+.tgrid{display:grid;grid-template-columns:repeat(40,1fr);gap:3px;margin-top:14px}
+.tgrid i{aspect-ratio:1;border-radius:2px;background:#CFE9DF}
+.tgrid i.w{background:#F3C77E}.tgrid i.c{background:var(--crit)}.tgrid i.n{background:#E2E7EC}
+.legend{display:flex;gap:18px;font-size:12.5px;color:var(--muted);margin-top:14px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.inc-card{flex:1;border-left:4px solid var(--crit)}
+.callout{position:absolute}
+
+/* timeline */
+.tl{position:relative;padding-left:26px}
+.tl:before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.tl .ev{position:relative;padding-bottom:16px}
+.tl .ev:last-child{padding-bottom:0}
+.tl .ev:before{content:"";position:absolute;left:-24px;top:4px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--faint)}
+.tl .ev.c:before{border-color:var(--crit);background:var(--crit)}
+.tl .ev.a:before{border-color:var(--info);background:var(--info)}
+.tl .ev.o:before{border-color:var(--ok);background:var(--ok)}
+.tl .t{font-family:PlexMono;font-size:12.5px;color:var(--muted)}
+.tl .h{font-weight:500;margin-top:1px}
+.tl .d{color:var(--muted);font-size:13px}
+.ai{background:#F3F6FD;border:1px solid #D4DEF8;border-radius:10px;padding:16px 18px}
+.ai h2{display:flex;align-items:center;gap:8px}
+.ai p{font-size:13.5px;margin-top:8px;color:#26344A}
+.approve{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #EDF0F3}
+.approve:last-child{border-bottom:0}
+.approve .txt{flex:1}
+.approve .txt div{font-size:12.5px;color:var(--muted)}
+
+/* routing */
+.matrix td,.matrix th{text-align:center}.matrix td{padding-top:16px;padding-bottom:16px}
+.matrix td:first-child,.matrix th:first-child{text-align:left}
+.tog{width:34px;height:20px;border-radius:10px;background:#D6DDE5;display:inline-block;position:relative;vertical-align:middle}
+.tog:after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:2px;left:2px}
+.tog.on{background:var(--ink)}
+.tog.on:after{left:16px}
+.phone{width:330px;height:640px;border-radius:40px;background:#0E1A2B;padding:12px;flex:none}
+.screen{width:100%;height:100%;border-radius:30px;background:#E7DFD6;overflow:hidden;display:flex;flex-direction:column}
+.chat-top{background:#1F3D35;color:#fff;padding:22px 16px 12px;display:flex;align-items:center;gap:10px}
+.chat-top .av{width:34px;height:34px;border-radius:50%;background:#fff;display:grid;place-items:center}
+.msgs{padding:14px 12px;display:flex;flex-direction:column;gap:8px;flex:1}
+.bub{background:#fff;border-radius:10px;padding:9px 11px;font-size:12.5px;line-height:1.45;max-width:92%;box-shadow:0 1px 0 rgba(14,26,43,.08)}
+.bub.me{align-self:flex-end;background:#D6F5C9}
+.bub .tm{font-size:10.5px;color:var(--faint);text-align:right;margin-top:3px}
+.bub b{font-weight:600}
+
+/* onboarding */
+.cmd{background:var(--rail);color:#E3EAF3;border-radius:10px;padding:18px 20px;font-family:PlexMono;font-size:14.5px;display:flex;align-items:center;gap:14px}
+.cmd .p{color:#6F819A}
+.cmd .copy{margin-left:auto;font-family:Plex;font-size:13px;color:#fff;border:1px solid #3A5272;border-radius:7px;padding:6px 12px}
+.step{display:flex;gap:14px;padding:13px 0;border-bottom:1px solid #EDF0F3;align-items:center}
+.step:last-child{border-bottom:0}
+.step .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none}
+.step .txt{flex:1}
+.step .txt div{font-size:12.5px;color:var(--muted)}
+.cap{font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ============ SHARED RAIL TEMPLATE (filled by JS) ============ -->
+
+<!-- PAGE 1: OVERVIEW -->
+<section class="page" data-nav="Overview">
+  <div class="main">
+    <div class="top"><div class="crumb"><b>Overview</b></div><div class="search">Search servers, tenants, IPs</div><div class="avatar">SR</div></div>
+    <div class="body">
+      <div class="status-line">
+        <div style="flex:1">
+          <h1>1 active incident, contained automatically</h1>
+          <div class="sub">Last 24 hours across 38 servers and 412 tenants. 18,240 attack attempts blocked.</div>
+        </div>
+        <div class="stat"><div class="num">38</div><div>Servers online</div></div>
+        <div class="stat"><div class="num">409</div><div>Tenants healthy</div></div>
+        <div class="stat"><div class="num" style="color:var(--crit)">1</div><div>Needs your approval</div></div>
+        <div class="stat"><div class="num">99.98%</div><div>Uptime, 30 days</div></div>
+      </div>
+
+      <div class="row">
+        <div class="panel grid-wrap">
+          <div style="display:flex;align-items:baseline;gap:12px"><h2>Every tenant, right now</h2><span class="cap">One square per customer. Hover to see their mail, sites and voice trunks.</span></div>
+          <div class="tgrid" id="tgrid"></div>
+          <div class="legend">
+            <span><i style="background:#CFE9DF"></i>Healthy 409</span>
+            <span><i style="background:#F3C77E"></i>Under watch 2</span>
+            <span><i style="background:var(--crit)"></i>Incident 1</span>
+            <span><i style="background:#E2E7EC"></i>No traffic 0</span>
+          </div>
+        </div>
+        <div class="panel inc-card" style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:8px"><span class="pill crit"><span class="dot" style="background:var(--crit)"></span>Critical</span><span class="pill info">Contained</span></div>
+          <h2 style="font-size:17px;line-height:1.35">Hijacked mailbox sending spam</h2>
+          <div class="sub" style="font-size:13.5px">billing@rahmantraders.com on mail-02. Password guessed after 4,812 attempts from 312 IPs. 1,840 spam messages held before delivery.</div>
+          <div class="kv"><span>Tenants affected</span><b>1 of 412</b></div>
+          <div class="kv"><span>Server IP reputation</span><b style="color:var(--ok)">Clean on 8 lists</b></div>
+          <div class="kv"><span>Started</span><b>02:14, 41 min ago</b></div>
+          <div style="margin-top:auto;display:flex;gap:10px"><span class="btn pri">Open incident</span><span class="btn">Reset password</span></div>
+        </div>
+      </div>
+
+      <div class="row" style="flex:1">
+        <div class="panel" style="flex:1.55">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px"><h2>Servers</h2><span class="cap">Services detected automatically at install</span></div>
+          <table>
+            <tr><th>Server</th><th>Detected</th><th>Guards on</th><th>CPU</th><th>RAM</th><th>Status</th></tr>
+            <tr><td><b style="font-weight:500">mail-02</b><div class="cap mono">185.42.17.22</div></td><td><span class="chip">Postfix</span><span class="chip">Dovecot</span></td><td><span class="chip g">Mail</span><span class="chip g">Server</span></td><td><span class="bar"><i style="width:71%;background:var(--warn)"></i></span>71%</td><td><span class="bar"><i style="width:58%;background:#7F8FA3"></i></span>58%</td><td><span class="pill crit">Incident</span></td></tr>
+            <tr><td><b style="font-weight:500">web-07</b><div class="cap mono">185.42.17.40</div></td><td><span class="chip">Nginx</span><span class="chip">PHP-FPM</span><span class="chip">MySQL</span></td><td><span class="chip g">Web</span><span class="chip g">Server</span></td><td><span class="bar"><i style="width:64%;background:var(--warn)"></i></span>64%</td><td><span class="bar"><i style="width:49%;background:#7F8FA3"></i></span>49%</td><td><span class="pill warn">Traffic spike</span></td></tr>
+            <tr><td><b style="font-weight:500">voice-01</b><div class="cap mono">185.42.18.5</div></td><td><span class="chip">Asterisk</span><span class="chip">Kamailio</span></td><td><span class="chip g">Voice</span><span class="chip g">Server</span></td><td><span class="bar"><i style="width:22%;background:#7F8FA3"></i></span>22%</td><td><span class="bar"><i style="width:31%;background:#7F8FA3"></i></span>31%</td><td><span class="pill ok">Healthy</span></td></tr>
+            <tr><td><b style="font-weight:500">app-03</b><div class="cap mono">185.42.17.61</div></td><td><span class="chip">Docker</span><span class="chip">.NET</span><span class="chip">PostgreSQL</span></td><td><span class="chip g">Web</span><span class="chip g">Server</span></td><td><span class="bar"><i style="width:18%;background:#7F8FA3"></i></span>18%</td><td><span class="bar"><i style="width:44%;background:#7F8FA3"></i></span>44%</td><td><span class="pill ok">Healthy</span></td></tr>
+          </table>
+        </div>
+        <div class="panel" style="flex:1;display:flex;flex-direction:column">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><h2>Attacks blocked per hour</h2><span class="cap">Last 24 h</span></div>
+          <svg id="blocked" viewBox="0 0 440 300" style="width:100%;flex:1;margin-top:10px"></svg>
+          <div class="legend" style="margin-top:6px"><span><i style="background:#2F5BEA"></i>Mail</span><span><i style="background:#8FA4F3"></i>Web</span><span><i style="background:#C3CEF8"></i>Voice</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PAGE 2: INCIDENT -->
+<section class="page" data-nav="Incidents">
+  <div class="main">
+    <div class="top"><div class="crumb">Incidents / <b>INC-2041</b></div><div class="search">Search servers, tenants, IPs</div><div class="avatar">SR</div></div>
+    <div class="body">
+      <div style="display:flex;align-items:flex-start;gap:16px">
+        <div style="flex:1">
+          <div style="display:flex;gap:8px;margin-bottom:10px"><span class="pill crit"><span class="dot" style="background:var(--crit)"></span>Critical</span><span class="pill info">Contained automatically</span><span class="pill grey">Mail Guard</span></div>
+          <h1>Hijacked mailbox sending spam: billing@rahmantraders.com</h1>
+          <div class="sub">Tenant Rahman Traders on mail-02. Opened 02:14, contained 02:33. Waiting on 1 decision from you.</div>
+        </div>
+        <span class="btn">Share report</span><span class="btn pri">Mark resolved</span>
+      </div>
+
+      <div class="row" style="flex:1">
+        <div style="flex:1.25;display:flex;flex-direction:column;gap:20px">
+          <div class="panel">
+            <h2 style="margin-bottom:14px">What happened</h2>
+            <div class="tl">
+              <div class="ev"><div class="t">02:14</div><div class="h">Password guessing started on billing@</div><div class="d">4,812 failed logins over 17 minutes from 312 IPs in 41 countries. 286 IPs blocked as they crossed the limit.</div></div>
+              <div class="ev c"><div class="t">02:31</div><div class="h">Login succeeded from a new country</div><div class="d">IMAP login from <span class="mono">91.214.44.180</span> (Lithuania). This mailbox has only signed in from Bangladesh in the last 90 days.</div></div>
+              <div class="ev c"><div class="t">02:32</div><div class="h">Outbound mail jumped to 184× normal</div><div class="d">1,840 messages queued in 9 minutes to 1,612 unknown recipients. Normal for this mailbox: 10 per hour.</div></div>
+              <div class="ev a"><div class="t">02:33</div><div class="h">Outbound mail for this mailbox held</div><div class="d">Automatic. Messages are in quarantine, not deleted. Other mailboxes at Rahman Traders keep sending normally.</div></div>
+              <div class="ev o"><div class="t">02:35</div><div class="h">Server IP reputation checked: clean</div><div class="d"><span class="mono">185.42.17.22</span> is not listed on any of 8 blocklists. No other tenant affected.</div></div>
+            </div>
+          </div>
+          <div class="panel" style="flex:1">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><h2>Top source IPs</h2><span class="cap">Showing 4 of 312</span></div>
+            <table>
+              <tr><th>IP address</th><th>Country</th><th>Network</th><th>Attempts</th><th>Action</th></tr>
+              <tr><td class="mono">91.214.44.180</td><td>Lithuania</td><td>AS 212238</td><td>412</td><td><span class="pill crit">Signed in</span></td></tr>
+              <tr><td class="mono">45.148.10.92</td><td>Netherlands</td><td>AS 48090</td><td>388</td><td><span class="pill info">Blocked</span></td></tr>
+              <tr><td class="mono">193.32.162.11</td><td>Romania</td><td>AS 47890</td><td>301</td><td><span class="pill info">Blocked</span></td></tr>
+              <tr><td class="mono">103.149.28.54</td><td>Vietnam</td><td>AS 135905</td><td>254</td><td><span class="pill info">Blocked</span></td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;gap:20px">
+          <div class="ai">
+            <h2><svg class="ico" viewBox="0 0 16 16"><path d="M8 1l1.8 4.2L14 7l-4.2 1.8L8 13l-1.8-4.2L2 7l4.2-1.8z" fill="#2F5BEA"/></svg>Analysis</h2>
+            <p>This is an account takeover, not a server attack. The attacker guessed a weak password, then used the mailbox to send phishing that imitates a bank payment notice.</p>
+            <p>The rest of the server is unaffected. Holding outbound mail kept the shared IP off blocklists, so the other 411 tenants were never at risk.</p>
+            <p><b style="font-weight:600">Recommended:</b> reset the password, sign out all sessions and turn on two-step login for this tenant. Then release or delete the held messages.</p>
+          </div>
+          <div class="panel">
+            <h2 style="margin-bottom:4px">Waiting for your decision</h2>
+            <div class="approve"><div class="txt"><b style="font-weight:500">Reset password and sign out all sessions</b><div>Tenant admin gets a reset link by SMS</div></div><span class="btn">Skip</span><span class="btn pri">Approve</span></div>
+            <div class="approve"><div class="txt"><b style="font-weight:500">Delete 1,840 held messages</b><div>Reviewed sample: all phishing</div></div><span class="btn">Review</span><span class="btn danger">Delete</span></div>
+          </div>
+          <div class="panel" style="flex:1">
+            <h2 style="margin-bottom:8px">Impact</h2>
+            <div class="kv"><span>Tenants affected</span><b>1 of 412</b></div>
+            <div class="kv"><span>Mailboxes affected</span><b>1 of 14 at this tenant</b></div>
+            <div class="kv"><span>Messages delivered before hold</span><b style="color:var(--ok)">0</b></div>
+            <div class="kv"><span>Server IP on blocklists</span><b style="color:var(--ok)">0 of 8</b></div>
+            <div class="kv"><span>Customer notified</span><b>Yes, 02:36 by email</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PAGE 3: WEB GUARD -->
+<section class="page" data-nav="Web Guard">
+  <div class="main">
+    <div class="top"><div class="crumb">Web Guard / <b>shop.deshimart.com.bd</b></div><div class="search">Search servers, tenants, IPs</div><div class="avatar">SR</div></div>
+    <div class="body">
+      <div style="display:flex;align-items:flex-start;gap:16px">
+        <div style="flex:1">
+          <div style="display:flex;gap:8px;margin-bottom:10px"><span class="pill warn"><span class="dot" style="background:var(--warn)"></span>Traffic spike</span><span class="pill ok">Real customers, not an attack</span></div>
+          <h1>Traffic up 9× and it is real customers. Server scaled, site stays online.</h1>
+          <div class="sub">Tenant Deshi Mart on web-07. Spike began 19:02, matching their 11.11 sale email sent 18:58.</div>
+        </div>
+      </div>
+
+      <div class="row" style="flex:1">
+        <div style="flex:1.55;display:flex;flex-direction:column;gap:20px">
+          <div class="panel" style="flex:1;display:flex;flex-direction:column">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><h2>Requests per minute</h2><span class="cap">Last 3 hours</span></div>
+            <svg id="traffic" viewBox="0 0 860 400" style="width:100%;flex:1;margin-top:8px"></svg>
+          </div>
+          <div class="panel">
+            <h2 style="margin-bottom:12px">Why Shield thinks this is real</h2>
+            <table>
+              <tr><th>Signal</th><th>During spike</th><th>Normal</th><th>Points to</th></tr>
+              <tr><td>Visitors from Bangladesh</td><td>94%</td><td>91%</td><td><span class="pill ok">Customers</span></td></tr>
+              <tr><td>Visitors adding to cart</td><td>12.4%</td><td>9.8%</td><td><span class="pill ok">Customers</span></td></tr>
+              <tr><td>Distinct IP networks</td><td>2,140</td><td>380</td><td><span class="pill ok">Customers</span></td></tr>
+              <tr><td>Requests to the login page</td><td>2%</td><td>2%</td><td><span class="pill ok">Customers</span></td></tr>
+              <tr><td>Scripted clients (no JS, no cookies)</td><td>3.1%</td><td>2.7%</td><td><span class="pill grey">Normal level</span></td></tr>
+            </table>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:20px">
+          <div class="panel">
+            <h2 style="margin-bottom:6px">What Shield did</h2>
+            <div class="step"><div class="ic" style="background:var(--ok-bg)"><svg class="ico" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" stroke="#1C9C74" stroke-width="2" fill="none"/></svg></div><div class="txt"><b style="font-weight:500">Turned on page caching</b><div>19:04 · 71% of requests now served from cache</div></div></div>
+            <div class="step"><div class="ic" style="background:var(--ok-bg)"><svg class="ico" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" stroke="#1C9C74" stroke-width="2" fill="none"/></svg></div><div class="txt"><b style="font-weight:500">Raised PHP workers from 20 to 48</b><div>Within this tenant's plan limit of 64</div></div></div>
+            <div class="step"><div class="ic" style="background:var(--ok-bg)"><svg class="ico" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" stroke="#1C9C74" stroke-width="2" fill="none"/></svg></div><div class="txt"><b style="font-weight:500">Kept other sites on web-07 protected</b><div>Deshi Mart capped at 60% CPU, 34 other sites unaffected</div></div></div>
+            <div class="step"><div class="ic" style="background:var(--info-bg)"><svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" stroke="#2F5BEA" stroke-width="2" fill="none"/></svg></div><div class="txt"><b style="font-weight:500">Did not block anyone</b><div>Blocking would have turned away paying customers</div></div></div>
+          </div>
+          <div class="panel">
+            <h2 style="margin-bottom:8px">Site health now</h2>
+            <div class="kv"><span>Page load, median</span><b>640 ms</b></div>
+            <div class="kv"><span>Errors (5xx)</span><b style="color:var(--ok)">0.2%</b></div>
+            <div class="kv"><span>web-07 CPU</span><b>64%</b></div>
+            <div class="kv"><span>web-07 RAM</span><b>49%</b></div>
+          </div>
+          <div class="ai" style="flex:1">
+            <h2><svg class="ico" viewBox="0 0 16 16"><path d="M8 1l1.8 4.2L14 7l-4.2 1.8L8 13l-1.8-4.2L2 7l4.2-1.8z" fill="#2F5BEA"/></svg>Suggestion for Deshi Mart</h2>
+            <p>This tenant has run 3 sales this quarter and each one pushed web-07 past 60% CPU. Moving them to the Business plan or a dedicated node would remove the cap during the next sale.</p>
+            <div style="margin-top:12px;display:flex;gap:10px"><span class="btn pri">Send upgrade offer</span><span class="btn">Dismiss</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PAGE 4: MAIL GUARD -->
+<section class="page" data-nav="Mail Guard">
+  <div class="main">
+    <div class="top"><div class="crumb">Mail Guard / <b>All mail servers</b></div><div class="search">Search servers, tenants, IPs</div><div class="avatar">SR</div></div>
+    <div class="body">
+      <div class="status-line">
+        <div style="flex:1"><h1>Mail is flowing. 1 mailbox held, all sending IPs clean.</h1><div class="sub">3 mail servers, 6,920 mailboxes, 214 tenants. Last 24 hours.</div></div>
+        <div class="stat"><div class="num">412k</div><div>Messages delivered</div></div>
+        <div class="stat"><div class="num">9,301</div><div>Login attacks blocked</div></div>
+        <div class="stat"><div class="num">98.6%</div><div>DMARC pass rate</div></div>
+      </div>
+      <div class="row" style="flex:1">
+        <div style="flex:1.55;display:flex;flex-direction:column;gap:20px">
+          <div class="panel" style="flex:1;display:flex;flex-direction:column">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><h2>Failed logins vs. successful logins</h2><span class="cap">Per hour, last 24 h</span></div>
+            <svg id="logins" viewBox="0 0 860 470" style="width:100%;flex:1;margin-top:8px"></svg>
+          </div>
+          <div class="panel">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><h2>Mailboxes sending unusually</h2><span class="cap">Compared with each mailbox's own 30-day pattern</span></div>
+            <table>
+              <tr><th>Mailbox</th><th>Tenant</th><th>Queued, last hour</th><th>Usual</th><th>Status</th></tr>
+              <tr><td>billing@rahmantraders.com</td><td>Rahman Traders</td><td class="num">1,840</td><td>10</td><td><span class="pill crit">Held</span></td></tr>
+              <tr><td>news@greenleafschool.edu.bd</td><td>Greenleaf School</td><td class="num">3,200</td><td>3,100 on Sundays</td><td><span class="pill ok">Expected newsletter</span></td></tr>
+              <tr><td>sales@karimexports.com</td><td>Karim Exports</td><td class="num">220</td><td>40</td><td><span class="pill warn">Watching</span></td></tr>
+            </table>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:20px">
+          <div class="panel">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><h2>Sending IP reputation</h2><span class="cap">Checked every 15 min</span></div>
+            <table>
+              <tr><th>Blocklist</th><th class="mono" style="font-family:Plex">.17.22</th><th style="font-family:Plex">.17.23</th><th style="font-family:Plex">.17.24</th></tr>
+              <tr><td>Spamhaus ZEN</td><td><span class="dot" style="background:var(--ok)"></span></td><td><span class="dot" style="background:var(--ok)"></span></td><td><span class="dot" style="background:var(--ok)"></span></td></tr>
+              <tr><td>Barracuda</td><td><span class="dot" style="background:var(--ok)"></span></td><td><span class="dot" style="background:var(--ok)"></span></td><td><span class="dot" style="background:var(--ok)"></span></td></tr>
+              <tr><td>SpamCop</td><td><span class="dot" style="background:var(--ok)"></span></td><td><span class="dot" style="background:var(--ok)"></span></td><td><span class="dot" style="background:var(--ok)"></span></td></tr>
+              <tr><td>Microsoft SNDS</td><td><span class="dot" style="background:var(--ok)"></span></td><td><span class="dot" style="background:var(--warn)"></span></td><td><span class="dot" style="background:var(--ok)"></span></td></tr>
+              <tr><td>Gmail Postmaster</td><td><span class="dot" style="background:var(--ok)"></span></td><td><span class="dot" style="background:var(--ok)"></span></td><td><span class="dot" style="background:var(--ok)"></span></td></tr>
+            </table>
+            <div class="cap" style="margin-top:10px">.17.23 is yellow on Microsoft: complaint rate 0.21%, limit 0.3%.</div>
+          </div>
+          <div class="panel" style="flex:1">
+            <h2 style="margin-bottom:6px">Protection rules</h2>
+            <div class="step"><div class="txt"><b style="font-weight:500">Block IP after failed logins</b><div>10 failures in 10 minutes, blocked for 24 hours</div></div><span class="tog on"></span></div>
+            <div class="step"><div class="txt"><b style="font-weight:500">Hold mailbox sending far above normal</b><div>More than 20× its usual hourly rate</div></div><span class="tog on"></span></div>
+            <div class="step"><div class="txt"><b style="font-weight:500">Flag sign-ins from a new country</b><div>Alert only, no block</div></div><span class="tog on"></span></div>
+            <div class="step"><div class="txt"><b style="font-weight:500">Require two-step login for admins</b><div>Applies to tenant admin mailboxes</div></div><span class="tog"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PAGE 5: ALERTS -->
+<section class="page" data-nav="Alerts">
+  <div class="main">
+    <div class="top"><div class="crumb">Settings / <b>Alerts</b></div><div class="search">Search servers, tenants, IPs</div><div class="avatar">SR</div></div>
+    <div class="body">
+      <div><h1>Who hears about what, and where</h1><div class="sub">Small things stay on the dashboard. Real emergencies reach your phone, even at 3 a.m.</div></div>
+      <div class="row" style="flex:1">
+        <div style="flex:1;display:flex;flex-direction:column;gap:20px">
+          <div class="panel">
+            <h2 style="margin-bottom:14px">Routing by severity</h2>
+            <table class="matrix">
+              <tr><th>Severity</th><th>Dashboard</th><th>Email</th><th>Telegram</th><th>WhatsApp</th><th>Voice call</th></tr>
+              <tr><td><span class="pill grey">Info</span><div class="cap">Blocked scans, routine bans</div></td><td><span class="tog on"></span></td><td><span class="tog"></span></td><td><span class="tog"></span></td><td><span class="tog"></span></td><td><span class="tog"></span></td></tr>
+              <tr><td><span class="pill warn">Warning</span><div class="cap">Spikes, unusual senders</div></td><td><span class="tog on"></span></td><td><span class="tog"></span></td><td><span class="tog on"></span></td><td><span class="tog"></span></td><td><span class="tog"></span></td></tr>
+              <tr><td><span class="pill crit">Critical</span><div class="cap">Hijacked account, attack in progress</div></td><td><span class="tog on"></span></td><td><span class="tog on"></span></td><td><span class="tog on"></span></td><td><span class="tog on"></span></td><td><span class="tog"></span></td></tr>
+              <tr><td><span class="pill crit" style="background:var(--crit);color:#fff">Down</span><div class="cap">Server or service unreachable</div></td><td><span class="tog on"></span></td><td><span class="tog on"></span></td><td><span class="tog on"></span></td><td><span class="tog on"></span></td><td><span class="tog on"></span></td></tr>
+            </table>
+          </div>
+          <div class="row" style="flex:1">
+            <div class="panel" style="flex:1">
+              <h2 style="margin-bottom:8px">On call this week</h2>
+              <div class="step"><div class="avatar">SR</div><div class="txt"><b style="font-weight:500">Shohag R.</b><div>Primary · WhatsApp, voice call</div></div><span class="pill ok">On duty</span></div>
+              <div class="step"><div class="avatar" style="background:#E3D7C6">NA</div><div class="txt"><b style="font-weight:500">Nadia A.</b><div>Backup after 10 min without reply</div></div><span class="pill grey">Backup</span></div>
+              <div class="step"><div class="avatar" style="background:#D2E6DD">TK</div><div class="txt"><b style="font-weight:500">Tanvir K.</b><div>Daily summary only</div></div><span class="pill grey">Summary</span></div><div style="margin-top:14px;display:flex;gap:10px"><span class="btn">Add person</span><span class="btn">Edit rotation</span></div>
+            </div>
+            <div class="panel" style="flex:1">
+              <h2 style="margin-bottom:8px">Quiet rules</h2>
+              <div class="step"><div class="txt"><b style="font-weight:500">Group repeat alerts</b><div>One message per incident, updates in thread</div></div><span class="tog on"></span></div>
+              <div class="step"><div class="txt"><b style="font-weight:500">Night mode, 00:00 to 07:00</b><div>Only Critical and Down reach phones</div></div><span class="tog on"></span></div>
+              <div class="step"><div class="txt"><b style="font-weight:500">Daily summary email</b><div>Every morning at 09:00</div></div><span class="tog on"></span></div><div style="margin-top:14px"><span class="btn pri">Send a test alert</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:0 20px">
+          <div class="phone"><div class="screen">
+            <div class="chat-top"><div class="av"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 2l8 3.5v6c0 5-3.4 9.2-8 10.5-4.6-1.3-8-5.5-8-10.5v-6z" fill="#13233A"/></svg></div><div><div style="font-weight:600;font-size:14px">Shield alerts</div><div style="font-size:11px;opacity:.75">Business account</div></div></div>
+            <div class="msgs">
+              <div class="bub"><b>🔴 Critical: hijacked mailbox</b><br>billing@rahmantraders.com on mail-02 tried to send 1,840 spam messages after a password guess.<br><br>✅ Outbound mail held automatically<br>✅ Server IP still clean, other 411 tenants safe<br><br>Reply <b>1</b> to reset password and sign out sessions<br>Reply <b>2</b> to open the incident<div class="tm">02:33</div></div>
+              <div class="bub me">1<div class="tm">02:41 ✓✓</div></div>
+              <div class="bub">Done. Password reset, 3 sessions signed out. Tenant admin got an SMS with a reset link.<br><br>Held messages are waiting for your review in the dashboard.<div class="tm">02:41</div></div>
+            </div>
+          </div></div>
+          <div class="cap">Preview of a Critical alert</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PAGE 6: ADD SERVER -->
+<section class="page" data-nav="Servers">
+  <div class="main">
+    <div class="top"><div class="crumb">Servers / <b>Add a server</b></div><div class="search">Search servers, tenants, IPs</div><div class="avatar">SR</div></div>
+    <div class="body">
+      <div><h1>Add a server in one command</h1><div class="sub">Run this on any Linux server. Shield finds what is running and turns on the right protection. Nothing to configure.</div></div>
+      <div class="cmd"><span class="p">$</span><span>curl -sSL get.shield.example | sudo sh -s -- --key <span style="color:#8FB4FF">sk_live_7Hq2…f91</span></span><span class="copy">Copy</span></div>
+      <div class="row" style="flex:1">
+        <div class="panel" style="flex:1.3">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px"><h2>mail-04 is connecting</h2><span class="pill info">Live</span></div>
+          <div class="step"><div class="ic" style="background:var(--ok-bg)"><svg class="ico" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" stroke="#1C9C74" stroke-width="2" fill="none"/></svg></div><div class="txt"><b style="font-weight:500">Connected securely</b><div>Ubuntu 24.04, 8 CPU, 16 GB RAM, <span class="mono">185.42.17.25</span></div></div><span class="cap">2 s</span></div>
+          <div class="step"><div class="ic" style="background:var(--ok-bg)"><svg class="ico" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" stroke="#1C9C74" stroke-width="2" fill="none"/></svg></div><div class="txt"><b style="font-weight:500">Found Postfix 3.8 and Dovecot 2.3</b><div>Mail Guard turned on with 142 mailboxes across 9 tenants</div></div><span class="chip g">Mail Guard</span></div>
+          <div class="step"><div class="ic" style="background:var(--ok-bg)"><svg class="ico" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" stroke="#1C9C74" stroke-width="2" fill="none"/></svg></div><div class="txt"><b style="font-weight:500">Found Nginx 1.26 with 3 sites</b><div>Web Guard turned on, per-site limits applied</div></div><span class="chip g">Web Guard</span></div>
+          <div class="step"><div class="ic" style="background:var(--ok-bg)"><svg class="ico" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" stroke="#1C9C74" stroke-width="2" fill="none"/></svg></div><div class="txt"><b style="font-weight:500">Checked SSH and system security</b><div>Root login by password is on. Fix offered below.</div></div><span class="chip g">Server Guard</span></div>
+          <div class="step"><div class="ic" style="background:#EEF1F4"><svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" stroke="#8A95A4" stroke-width="2" fill="none" stroke-dasharray="20 12"/></svg></div><div class="txt"><b style="font-weight:500">Scanning files for malware and web shells</b><div>18,402 of 61,000 files</div></div><span class="cap">30%</span></div>
+          <div class="step"><div class="ic" style="background:#EEF1F4"></div><div class="txt" style="color:var(--faint)"><b style="font-weight:500">Learning normal traffic</b><div style="color:var(--faint)">Baseline ready after 24 hours. Alerts work from now.</div></div></div><div style="margin-top:18px;background:#F4F6F8;border:1px solid var(--line);border-radius:8px;padding:14px 16px;font-size:13px;color:#3A4757"><b style="font-weight:600;color:var(--ink)">How the agent behaves.</b> Uses about 40 MB RAM and under 1% CPU. Talks out over HTTPS only, no inbound ports opened. Every action it takes is written to the audit log, and nothing is changed on the server without a rule you turned on or a click from you.</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:20px">
+          <div class="panel">
+            <h2 style="margin-bottom:8px">Found 2 risks on mail-04</h2>
+            <div class="approve"><div class="txt"><b style="font-weight:500">Root can sign in with a password</b><div>Most brute-force attacks target this</div></div><span class="btn pri">Fix now</span></div>
+            <div class="approve"><div class="txt"><b style="font-weight:500">12 security updates pending</b><div>2 are rated critical (OpenSSH, glibc)</div></div><span class="btn">Schedule</span></div>
+          </div>
+          <div class="panel" style="flex:1">
+            <h2 style="margin-bottom:10px">What Shield can protect</h2>
+            <table>
+              <tr><th>When it finds</th><th>It turns on</th></tr>
+              <tr><td>Any Linux server</td><td><span class="chip g">Server Guard</span></td></tr>
+              <tr><td>Postfix, Exim, Dovecot</td><td><span class="chip g">Mail Guard</span></td></tr>
+              <tr><td>Nginx, Apache, Node, .NET, PHP</td><td><span class="chip g">Web Guard</span></td></tr>
+              <tr><td>Asterisk, FreeSWITCH, Kamailio</td><td><span class="chip g">Voice Guard</span></td></tr>
+              <tr><td>MySQL, PostgreSQL, Redis</td><td><span class="chip g">Database</span></td></tr>
+              <tr><td>Docker</td><td><span class="chip g">Containers</span></td></tr><tr><td style="color:var(--faint)">Windows Server</td><td><span class="chip">Coming soon</span></td></tr><tr><td style="color:var(--faint)">Kubernetes</td><td><span class="chip">Coming soon</span></td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+// ----- rail -----
+const ICONS={
+ Overview:'<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>',
+ Incidents:'<path d="M8 2l6.5 11.5h-13z"/><path d="M8 6.5v3M8 11.3v.2"/>',
+ Servers:'<rect x="2" y="2.5" width="12" height="4.5" rx="1"/><rect x="2" y="9" width="12" height="4.5" rx="1"/>',
+ Tenants:'<circle cx="6" cy="6" r="2.5"/><path d="M1.5 13.5c.6-2.4 2.4-3.5 4.5-3.5s3.9 1.1 4.5 3.5"/><circle cx="11.5" cy="5" r="2"/>',
+ 'Mail Guard':'<rect x="2" y="3.5" width="12" height="9" rx="1"/><path d="M2.5 4.5L8 9l5.5-4.5"/>',
+ 'Web Guard':'<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12"/>',
+ 'Voice Guard':'<path d="M4 2.5h2l1 3-1.5 1c.7 1.6 2 2.9 3.5 3.5l1-1.5 3 1v2c0 .8-.7 1.5-1.5 1.5C6.6 13 3 9.4 2.5 4 2.5 3.2 3.2 2.5 4 2.5z"/>',
+ Alerts:'<path d="M4 11V7a4 4 0 018 0v4l1.5 1.5h-11z"/><path d="M6.5 14h3"/>',
+ Settings:'<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>'
+};
+const nav=[['Overview'],['Incidents',1],['Servers'],['Tenants'],'—Guards',['Mail Guard'],['Web Guard'],['Voice Guard'],'—',['Alerts'],['Settings']];
+document.querySelectorAll('.page').forEach(p=>{
+  const on=p.dataset.nav;
+  let h='<aside class="rail"><div class="brand"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 1.8l8.6 3.6v6.2c0 5.4-3.6 9.9-8.6 11.2-5-1.3-8.6-5.8-8.6-11.2V5.4z" fill="#2F5BEA"/><path d="M12 6.5v10.5M7.5 10.2h9" stroke="#fff" stroke-width="2"/></svg>Shield</div>';
+  h+='<div class="org"><b>Northwind Hosting</b>38 servers, 412 tenants</div><nav class="nav">';
+  nav.forEach(n=>{
+    if(typeof n==='string'){h+= n==='—'?'<hr>':'<hr><div class="grp">'+n.slice(1)+'</div>';return;}
+    const [name,c]=n;
+    h+=`<a class="${name===on?'on':''}"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>${name}${c?'<span class="cnt">'+c+'</span>':''}</a>`;
+  });
+  h+='</nav><div class="foot">Agents reporting <span>38 of 38</span><br>Last sync <span>4 s ago</span></div></aside>';
+  p.insertAdjacentHTML('afterbegin',h);
+});
+
+// ----- deterministic rand -----
+let s=7;const r=()=>{s=(s*16807)%2147483647;return (s-1)/2147483646;};
+
+// tenant grid
+const g=document.getElementById('tgrid');let gh='';
+for(let i=0;i<440;i++){if(i>=412){gh+='<i style="visibility:hidden"></i>';continue;}
+  let c=''; if(i===137)c='c'; else if(i===58||i===301)c='w';
+  gh+=`<i class="${c}"></i>`;}
+g.innerHTML=gh;
+
+const NS='http://www.w3.org/2000/svg';
+function svg(el,str){el.innerHTML=str;}
+
+// blocked per hour stacked bars
+(function(){const W=440,H=300,pl=34,pb=22,n=24,bw=(W-pl)/n;let o='';
+ const max=1800;[0,500,1000,1500].forEach(v=>{const y=H-pb-(v/max)*(H-pb-8);o+=`<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" stroke="#E6EAEF"/><text x="${pl-6}" y="${y+4}" font-size="12" fill="#8A95A4" text-anchor="end" font-family="Plex">${v>=1000?v/1000+'k':v}</text>`;});
+ for(let i=0;i<n;i++){let m=250+r()*350,w=120+r()*200,v=40+r()*90; if(i===2||i===3){m+=900;}
+  const x=pl+i*bw+2,sc=(H-pb-8)/max;let y=H-pb;
+  [[m,'#2F5BEA'],[w,'#8FA4F3'],[v,'#C3CEF8']].forEach(([val,col])=>{const h=val*sc;y-=h;o+=`<rect x="${x}" y="${y}" width="${bw-4}" height="${h}" fill="${col}"/>`;});
+  if(i%4===0)o+=`<text x="${x+(bw-4)/2}" y="${H-6}" font-size="12" fill="#8A95A4" text-anchor="middle" font-family="Plex">${String(i).padStart(2,'0')}:00</text>`;}
+ o+=`<text x="${pl+3*bw}" y="${H-pb-(1720/1800)*(H-pb-8)-6}" font-size="13" fill="#0E1A2B" text-anchor="middle" font-family="Plex" font-weight="500">INC-2041</text>`;
+ svg(document.getElementById('blocked'),o);})();
+
+// traffic area
+(function(){const W=860,H=400,pl=48,pb=28,n=180;const pts=[];
+ for(let i=0;i<n;i++){let v=420+Math.sin(i/9)*40+r()*60; if(i>=122){const k=Math.min(1,(i-122)/6);v=v+k*(3400+Math.sin(i/5)*300+r()*350);} pts.push(v);}
+ const max=5200,sx=i=>pl+i*(W-pl)/(n-1),sy=v=>H-pb-(v/max)*(H-pb-10);let o='';
+ [0,1000,2000,3000,4000,5000].forEach(v=>{o+=`<line x1="${pl}" x2="${W}" y1="${sy(v)}" y2="${sy(v)}" stroke="#E6EAEF"/><text x="${pl-8}" y="${sy(v)+4}" font-size="12.5" fill="#8A95A4" text-anchor="end" font-family="Plex">${v/1000}k</text>`;});
+ // capacity line
+ o+=`<line x1="${pl}" x2="${sx(124)}" y1="${sy(1500)}" y2="${sy(1500)}" stroke="#D7263D" stroke-dasharray="5 5"/><line x1="${sx(124)}" x2="${W}" y1="${sy(4700)}" y2="${sy(4700)}" stroke="#1C9C74" stroke-dasharray="5 5"/>`;
+ o+=`<text x="${pl+8}" y="${sy(1500)-7}" font-size="13" fill="#A3162A" font-family="Plex">Capacity before scaling</text><text x="${W-6}" y="${sy(4700)-8}" font-size="13" fill="#11704F" text-anchor="end" font-family="Plex">Capacity after scaling and cache</text>`;
+ let d=`M${sx(0)} ${sy(pts[0])}`;pts.forEach((v,i)=>d+=` L${sx(i)} ${sy(v)}`);
+ o+=`<path d="${d} L${sx(n-1)} ${H-pb} L${sx(0)} ${H-pb}Z" fill="#2F5BEA" fill-opacity=".1"/><path d="${d}" fill="none" stroke="#2F5BEA" stroke-width="1.8"/>`;
+ // markers
+ o+=`<line x1="${sx(118)}" x2="${sx(118)}" y1="20" y2="${H-pb}" stroke="#5B6778" stroke-dasharray="3 4"/><text x="${sx(118)-6}" y="34" font-size="13" fill="#0E1A2B" text-anchor="end" font-family="Plex">18:58 sale email sent</text>`;
+ o+=`<line x1="${sx(124)}" x2="${sx(124)}" y1="${sy(4700)}" y2="${H-pb}" stroke="#1C9C74" stroke-dasharray="3 4"/><text x="${sx(124)+8}" y="${sy(900)}" font-size="13" fill="#11704F" font-weight="500" font-family="Plex">19:04 Shield scaled</text>`;
+ ['17:00','18:00','19:00','20:00'].forEach((t,k)=>{o+=`<text x="${sx(Math.min(k*60,179))}" y="${H-6}" font-size="12.5" fill="#8A95A4" text-anchor="${k===0?'start':k===3?'end':'middle'}" font-family="Plex">${t}</text>`;});
+ svg(document.getElementById('traffic'),o);})();
+
+// logins bars
+(function(){const W=860,H=470,pl=48,pb=28,n=24,bw=(W-pl)/n;let o='';const max=1400,sy=v=>H-pb-(v/max)*(H-pb-10);
+ [0,500,1000].forEach(v=>{o+=`<line x1="${pl}" x2="${W}" y1="${sy(v)}" y2="${sy(v)}" stroke="#E6EAEF"/><text x="${pl-8}" y="${sy(v)+4}" font-size="12.5" fill="#8A95A4" text-anchor="end" font-family="Plex">${v>=1000?'1k':v}</text>`;});
+ for(let i=0;i<n;i++){let f=180+r()*220;if(i===2)f=1310;if(i===3)f=980;let ok=60+Math.max(0,Math.sin((i-6)/24*Math.PI*2))*420+r()*40;
+  const x=pl+i*bw+3,w=(bw-8)/2;o+=`<rect x="${x}" y="${sy(f)}" width="${w}" height="${H-pb-sy(f)}" fill="${i===2||i===3?'#D7263D':'#E9A1AA'}"/><rect x="${x+w+2}" y="${sy(ok)}" width="${w}" height="${H-pb-sy(ok)}" fill="#1C9C74"/>`;
+  if(i%3===0)o+=`<text x="${x+w}" y="${H-5}" font-size="12.5" fill="#8A95A4" text-anchor="middle" font-family="Plex">${String(i).padStart(2,'0')}:00</text>`;}
+ o+=`<text x="${pl+3*bw+bw}" y="${sy(1310)+4}" font-size="13" fill="#A3162A" font-family="Plex">Password guessing on billing@, 02:14</text>`;
+ o+=`<rect x="${W-230}" y="8" width="10" height="10" fill="#E9A1AA"/><text x="${W-214}" y="17" font-size="13" fill="#5B6778" font-family="Plex">Failed</text><rect x="${W-150}" y="8" width="10" height="10" fill="#1C9C74"/><text x="${W-134}" y="17" font-size="13" fill="#5B6778" font-family="Plex">Successful</text>`;
+ svg(document.getElementById('logins'),o);})();
+</script>
+</body>
+</html>

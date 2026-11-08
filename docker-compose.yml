@@ -1,0 +1,58 @@
+# Local stack. `docker compose up -d` then open http://localhost:8080
+# The API runs in Development mode here so it seeds the demo organization and creates tables
+# (EnsureCreated). TODO(Phase 0): switch to EF Core migrations and a Production profile.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: shield
+      POSTGRES_PASSWORD: shield-dev-password
+      POSTGRES_DB: shield
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shield"]
+      interval: 5s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data"]
+    ports: ["4222:4222"]
+    volumes: [natsdata:/data]
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.106.1
+    command: ["-retentionPeriod=30d"]
+    ports: ["8428:8428"]
+    volumes: [vmdata:/victoria-metrics-data]
+
+  api:
+    build: { context: ./backend, args: { PROJECT: Shield.Api } }
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5080
+      ConnectionStrings__Postgres: Host=postgres;Database=shield;Username=shield;Password=shield-dev-password
+      Shield__RunPipelineInApi: "true"
+      Shield__WebOrigins__0: http://localhost:8080
+    ports: ["5080:5080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  # Enable once NatsEventBus exists (Phase 1); until then the API runs the pipeline in-process.
+  # worker:
+  #   build: { context: ./backend, args: { PROJECT: Shield.Worker } }
+  #   environment:
+  #     ConnectionStrings__Postgres: Host=postgres;Database=shield;Username=shield;Password=shield-dev-password
+  #     Nats__Url: nats://nats:4222
+  #   depends_on: [postgres, nats]
+
+  web:
+    build: ./web
+    ports: ["8080:80"]
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  natsdata:
+  vmdata:

@@ -1,0 +1,32 @@
+/* Design tokens — SPEC §15 and docs/design/Shield-Frontend-Design.pdf. Do not add colors outside this file. */
+@font-face { font-family: Plex; font-weight: 400; src: url(../assets/fonts/plex-400.woff2) format('woff2'); font-display: swap; }
+@font-face { font-family: Plex; font-weight: 500; src: url(../assets/fonts/plex-500.woff2) format('woff2'); font-display: swap; }
+@font-face { font-family: Plex; font-weight: 600; src: url(../assets/fonts/plex-600.woff2) format('woff2'); font-display: swap; }
+@font-face { font-family: PlexCond; font-weight: 600; src: url(../assets/fonts/cond-600.woff2) format('woff2'); font-display: swap; }
+@font-face { font-family: PlexMono; font-weight: 400; src: url(../assets/fonts/mono-400.woff2) format('woff2'); font-display: swap; }
+
+:root {
+  --canvas: #E9EDF1;
+  --surface: #FFFFFF;
+  --ink: #0E1A2B;
+  --muted: #5B6778;
+  --faint: #8A95A4;
+  --line: #D6DDE5;
+  --line-soft: #EDF0F3;
+  --rail: #13233A;
+  --rail-ink: #AEBBCD;
+  --rail-active: #22385A;
+
+  --crit: #D7263D;  --crit-bg: #FBE9EB;  --crit-ink: #A3162A;
+  --warn: #E08A0B;  --warn-bg: #FDF2E1;  --warn-ink: #93590A;
+  --ok:   #1C9C74;  --ok-bg:   #E4F4EE;  --ok-ink:   #11704F;
+  --info: #2F5BEA;  --info-bg: #E8EEFD;  --info-ink: #2140B0;
+
+  --font: Plex, system-ui, sans-serif;
+  --font-num: PlexCond, Plex, sans-serif;
+  --font-mono: PlexMono, ui-monospace, monospace;
+
+  --radius-panel: 10px;
+  --radius-btn: 8px;
+  --radius-pill: 20px;
+}
