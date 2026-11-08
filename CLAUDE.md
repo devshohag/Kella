@@ -1,17 +1,17 @@
 # Instructions for the coding agent
 
-You are building **Shield**, a multi-tenant security and reliability platform. Read `docs/SPEC.md` fully before starting any task. The spec is the source of truth; if a task needs a spec change, change the spec in the same commit and say so.
+You are building **Kella**, a multi-tenant security and reliability platform. Read `docs/SPEC.md` fully before starting any task. The spec is the source of truth; if a task needs a spec change, change the spec in the same commit and say so.
 
 ## Repository layout
 
 ```
-backend/                 .NET 10 solution (Shield.slnx)
-  src/Shield.Core/            domain models, rules, playbooks, interfaces. No EF, no ASP.NET.
-  src/Shield.Infrastructure/  EF Core DbContext, migrations, NATS, alert channels, AI providers
-  src/Shield.Api/             ASP.NET Core minimal APIs (agent API + dashboard API)
-  src/Shield.Worker/          background consumers: aggregator, rule engine, playbooks, alerts, AI
-  tests/Shield.Tests/         xUnit tests
-agent/                   Go agent (cmd/shield-agent, internal/...)
+backend/                 .NET 10 solution (Kella.slnx)
+  src/Kella.Core/            domain models, rules, playbooks, interfaces. No EF, no ASP.NET.
+  src/Kella.Infrastructure/  EF Core DbContext, migrations, NATS, alert channels, AI providers
+  src/Kella.Api/             ASP.NET Core minimal APIs (agent API + dashboard API)
+  src/Kella.Worker/          background consumers: aggregator, rule engine, playbooks, alerts, AI
+  tests/Kella.Tests/         xUnit tests
+agent/                   Go agent (cmd/kella-agent, internal/...)
 web/                     React + TypeScript + Vite dashboard
 deploy/                  install.sh, systemd unit, docker files
 docs/                    SPEC.md, design PDF, decisions/
@@ -22,9 +22,9 @@ docker-compose.yml       local stack
 
 ```bash
 docker compose up -d postgres nats victoriametrics      # infra
-cd backend && dotnet run --project src/Shield.Api          # API on :5080
-cd backend && dotnet run --project src/Shield.Worker       # workers
-cd agent && go run ./cmd/shield-agent --config ./dev-agent.yaml
+cd backend && dotnet run --project src/Kella.Api          # API on :5080
+cd backend && dotnet run --project src/Kella.Worker       # workers
+cd agent && go run ./cmd/kella-agent --config ./dev-agent.yaml
 cd web && npm install && npm run dev                       # web on :5173
 ```
 
@@ -49,12 +49,12 @@ Never commit with failing builds or tests. Never delete or skip a test to make i
 1. **Follow the roadmap order** in SPEC §17. Do not start a phase before the previous one's acceptance criteria pass. Tick the checkbox in SPEC.md when a criterion is met.
 2. **Small vertical slices.** One feature end to end (agent → API → worker → UI) per task, with tests.
 3. **Event type names, API routes and table names in the spec are a contract.** Do not rename them.
-4. **Hot path stays deterministic.** No LLM calls in ingest, aggregation, rules or playbooks. AI only in `Shield.Worker/Ai`.
-5. **Tenant scoping.** Every query goes through `ShieldDbContext` with the organization filter. `IgnoreQueryFilters()` is allowed only in: agent enrollment and agent token lookup (`AgentEndpoints.cs`), migrations/seeding, and tests. Nowhere else.
+4. **Hot path stays deterministic.** No LLM calls in ingest, aggregation, rules or playbooks. AI only in `Kella.Worker/Ai`.
+5. **Tenant scoping.** Every query goes through `KellaDbContext` with the organization filter. `IgnoreQueryFilters()` is allowed only in: agent enrollment and agent token lookup (`AgentEndpoints.cs`), migrations/seeding, and tests. Nowhere else.
 6. **Every infrastructure-changing action** goes through `actions` + `agent_commands` + `audit_log`. No shortcuts.
 7. **Agent safety.** Agent must refuse unsigned/expired commands, never block allowlisted IPs or the cloud endpoint IP, and keep RSS < 50 MB.
 8. **Parsers need real log samples** in `agent/internal/parsers/testdata/` and table-driven tests.
-9. **No secrets in code.** Configuration from environment variables (`SHIELD__...`) and `appsettings.Development.json` only for local dev values.
+9. **No secrets in code.** Configuration from environment variables (`KELLA__...`) and `appsettings.Development.json` only for local dev values.
 10. **UI uses the design tokens** in `web/src/styles/tokens.css`, shared primitives in `web/src/styles/app.css`, and the screens in `docs/design/`. Page-specific styles go in a `*.module.css` next to the component. Sentence case, plain words, buttons name the action.
 11. **Do not add new dependencies** without a one-line reason in the commit message. Prefer the standard library.
 12. If something in the spec is ambiguous, write the question in `docs/decisions/OPEN_QUESTIONS.md`, choose the simplest reasonable option, note it there, and continue.

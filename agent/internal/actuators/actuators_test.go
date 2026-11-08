@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/shield/agent/internal/model"
+	"github.com/devshohag/kella/agent/internal/model"
 )
 
 func newTestRunner(t *testing.T, requireSigned bool, pub string) (*Runner, *[]string) {
@@ -35,7 +35,7 @@ func TestBlockIPRunsNft(t *testing.T) {
 	if _, err := r.Execute(context.Background(), cmd("45.148.10.92")); err != nil {
 		t.Fatal(err)
 	}
-	want := "nft add element inet shield shield_block { 45.148.10.92 timeout 3600s }"
+	want := "nft add element inet kella kella_block { 45.148.10.92 timeout 3600s }"
 	if len(*calls) != 1 || (*calls)[0] != want {
 		t.Fatalf("calls = %v", *calls)
 	}

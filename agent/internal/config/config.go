@@ -1,4 +1,4 @@
-// Package config loads /etc/shield/agent.yaml.
+// Package config loads /etc/kella/agent.yaml.
 package config
 
 import (
@@ -10,7 +10,7 @@ import (
 )
 
 type Config struct {
-	// CloudURL is the Shield API base URL, e.g. https://api.shield.example.
+	// CloudURL is the Kella API base URL, e.g. https://api.kella.example.
 	CloudURL string `yaml:"cloudUrl"`
 	// EnrollmentKey is used once on first start; the agent then stores a token in TokenPath.
 	EnrollmentKey string `yaml:"enrollmentKey"`
@@ -54,8 +54,8 @@ func Load(path string) (*Config, error) {
 
 func Default() *Config {
 	c := &Config{
-		TokenPath:         "/etc/shield/token",
-		StatePath:         "/var/lib/shield",
+		TokenPath:         "/etc/kella/token",
+		StatePath:         "/var/lib/kella",
 		HeartbeatInterval: 60 * time.Second,
 		FlushInterval:     5 * time.Second,
 	}

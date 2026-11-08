@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/shield/agent/internal/model"
+	"github.com/devshohag/kella/agent/internal/model"
 )
 
 var (
@@ -88,7 +88,7 @@ func (r *Runner) Execute(ctx context.Context, c model.Command) (string, error) {
 }
 
 // CanonicalPayload is what the cloud signs: id|kind|expiresAt(RFC3339)|k1=v1&k2=v2 (keys sorted).
-// The backend must build the exact same string (TODO Phase 1: implement signing in Shield.Infrastructure).
+// The backend must build the exact same string (TODO Phase 1: implement signing in Kella.Infrastructure).
 func CanonicalPayload(c model.Command) []byte {
 	keys := make([]string, 0, len(c.Params))
 	for k := range c.Params {
@@ -133,11 +133,11 @@ func (r *Runner) blockIP(ctx context.Context, raw, ttl string) (string, error) {
 	if ttl == "" {
 		ttl = "86400"
 	}
-	set := "shield_block"
+	set := "kella_block"
 	if ip.To4() == nil {
-		set = "shield_block6"
+		set = "kella_block6"
 	}
-	args := []string{"add", "element", "inet", "shield", set, fmt.Sprintf("{ %s timeout %ss }", ip.String(), ttl)}
+	args := []string{"add", "element", "inet", "kella", set, fmt.Sprintf("{ %s timeout %ss }", ip.String(), ttl)}
 	return r.run(ctx, "nft", args...)
 }
 
@@ -146,11 +146,11 @@ func (r *Runner) unblockIP(ctx context.Context, raw string) (string, error) {
 	if ip == nil {
 		return "", fmt.Errorf("invalid ip %q", raw)
 	}
-	set := "shield_block"
+	set := "kella_block"
 	if ip.To4() == nil {
-		set = "shield_block6"
+		set = "kella_block6"
 	}
-	return r.run(ctx, "nft", "delete", "element", "inet", "shield", set, fmt.Sprintf("{ %s }", ip.String()))
+	return r.run(ctx, "nft", "delete", "element", "inet", "kella", set, fmt.Sprintf("{ %s }", ip.String()))
 }
 
 func (r *Runner) run(ctx context.Context, name string, args ...string) (string, error) {

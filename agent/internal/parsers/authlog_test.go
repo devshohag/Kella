@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/shield/agent/internal/model"
+	"github.com/devshohag/kella/agent/internal/model"
 )
 
 func TestParseAuthLine(t *testing.T) {

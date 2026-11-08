@@ -1,4 +1,4 @@
-// Typed client for the dashboard API (SPEC §14). Keep types in sync with backend/src/Shield.Api/Endpoints.
+// Typed client for the dashboard API (SPEC §14). Keep types in sync with backend/src/Kella.Api/Endpoints.
 
 export type Severity = 'Info' | 'Warning' | 'Critical' | 'Down'
 export type IncidentStatus = 'Open' | 'Contained' | 'Resolved'
@@ -37,7 +37,7 @@ export interface EnrollmentKey {
   installCommand: string
 }
 
-export interface ShieldAction {
+export interface KellaAction {
   id: string
   kind: string
   params: Record<string, string>
@@ -50,7 +50,7 @@ export interface IncidentDetail {
   incident: IncidentListItem
   summary: string
   findings: { id: string; ruleCode: string; title: string; evidence: Record<string, string>; firstSeen: string }[]
-  actions: ShieldAction[]
+  actions: KellaAction[]
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

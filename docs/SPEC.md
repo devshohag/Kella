@@ -1,6 +1,6 @@
-# Shield — Product & Technical Specification
+# Kella — Product & Technical Specification
 
-Version 0.1 · Working name "Shield" (rename later; do not hard-code the brand outside `branding` config).
+Version 0.1 · Product name **Kella** (decided 2026-11-08; do not hard-code the brand outside `branding` config).
 
 This is the single source of truth for what to build. The coding agent must read this file and `CLAUDE.md` before every task. When code and this spec disagree, the spec wins unless a change to the spec is committed first.
 
@@ -8,7 +8,7 @@ This is the single source of truth for what to build. The coding agent must read
 
 ## 1. Product in one paragraph
 
-Shield is a multi-tenant security and reliability platform for companies that run infrastructure **for other people**: hosting providers, mail providers, VoIP / call-center operators, ISPs, agencies and SaaS companies. A customer installs a small agent on each Linux server with one command. The agent detects what runs there (Postfix, Nginx, Asterisk, PostgreSQL, Docker…), switches on the matching protection module ("Guard"), streams events to the Shield cloud, and executes approved actions (block IP, hold a mailbox, cap a site). The cloud correlates events **per tenant** (the provider's end customer), runs detection rules, takes automatic containment actions, asks a human for risky actions, routes alerts (dashboard, email, Telegram, WhatsApp, voice call) and uses an LLM only to explain incidents and write reports.
+Kella is a multi-tenant security and reliability platform for companies that run infrastructure **for other people**: hosting providers, mail providers, VoIP / call-center operators, ISPs, agencies and SaaS companies. A customer installs a small agent on each Linux server with one command. The agent detects what runs there (Postfix, Nginx, Asterisk, PostgreSQL, Docker…), switches on the matching protection module ("Guard"), streams events to the Kella cloud, and executes approved actions (block IP, hold a mailbox, cap a site). The cloud correlates events **per tenant** (the provider's end customer), runs detection rules, takes automatic containment actions, asks a human for risky actions, routes alerts (dashboard, email, Telegram, WhatsApp, voice call) and uses an LLM only to explain incidents and write reports.
 
 **Core differentiator:** tenant awareness. Every event, incident and action is attributed to a specific tenant (domain, mailbox, site, SIP trunk), so a provider sees "billing@rahmantraders.com was hijacked; 1 of 412 tenants affected; shared IP still clean" instead of "IP 1.2.3.4 blocked".
 
@@ -18,9 +18,9 @@ Shield is a multi-tenant security and reliability platform for companies that ru
 
 | Term | Meaning |
 |---|---|
-| Organization | A Shield customer account (e.g. a hosting company). Billing unit. |
+| Organization | A Kella customer account (e.g. a hosting company). Billing unit. |
 | User | A person who logs into the dashboard. Belongs to one Organization. Roles: Owner, Admin, Responder, Viewer. |
-| Server | A machine running the Shield agent. Belongs to an Organization. |
+| Server | A machine running the Kella agent. Belongs to an Organization. |
 | Tenant | An end customer of the Organization (e.g. "Rahman Traders"). |
 | Asset | Something a Tenant owns that lives on a Server: `domain`, `mailbox`, `site`, `sip_trunk`, `database`, `container`. |
 | Guard | A protection module: Server, Mail, Web, Voice, Database, Container. Enabled per server by auto-detection. |
@@ -45,9 +45,9 @@ Shield is a multi-tenant security and reliability platform for companies that ru
 ## 4. System architecture
 
 ```
- Customer servers                         Shield cloud
+ Customer servers                         Kella cloud
  ┌─────────────────────┐   HTTPS 443   ┌──────────────────────────────────────────┐
- │ shield-agent (Go)    │──────────────▶│ Ingest API  (ASP.NET Core)               │
+ │ kella-agent (Go)    │──────────────▶│ Ingest API  (ASP.NET Core)               │
  │  - detectors         │   events,     │   └▶ NATS JetStream  (event bus)          │
  │  - collectors        │   metrics,    │        ├▶ Signal Aggregator (worker)      │
  │  - log tailers       │   heartbeat   │        ├▶ Rule Engine (worker)            │
@@ -66,7 +66,7 @@ Key decisions:
 
 - **Agent connects outbound only.** No inbound port on customer servers. Commands are fetched by long-poll (`GET /api/agent/commands?wait=30`), not pushed.
 - **Hot path is deterministic.** Detection and containment never call an LLM. AI runs asynchronously after an incident exists.
-- **One backend codebase**, multiple processes: `Shield.Api` (HTTP) and `Shield.Worker` (consumers). Both reference `Shield.Core` and `Shield.Infrastructure`.
+- **One backend codebase**, multiple processes: `Kella.Api` (HTTP) and `Kella.Worker` (consumers). Both reference `Kella.Core` and `Kella.Infrastructure`.
 - **Multi-tenancy by `OrganizationId`** on every row, enforced in EF Core global query filters. A request can never read another organization's data.
 
 ---
@@ -76,7 +76,7 @@ Key decisions:
 | Area | Choice |
 |---|---|
 | Backend | .NET 10, ASP.NET Core minimal APIs, EF Core 10, Npgsql |
-| Workers | .NET 10 `BackgroundService` in `Shield.Worker` |
+| Workers | .NET 10 `BackgroundService` in `Kella.Worker` |
 | Event bus | NATS JetStream (`NATS.Net` client). Phase 1 may use an in-process `Channel<T>` behind `IEventBus`. |
 | Database | PostgreSQL 16 |
 | Metrics | VictoriaMetrics (Prometheus remote-write compatible) |
@@ -175,11 +175,11 @@ Raw logs never leave the server in Phase 1. The agent parses locally and sends n
 ```
 curl -sSL https://get.<domain>/install.sh | sudo sh -s -- --key <enrollment-key>
 ```
-`install.sh` downloads the binary for the arch, writes `/etc/shield/agent.yaml`, creates `shield` system user, installs `shield-agent.service`, starts it.
+`install.sh` downloads the binary for the arch, writes `/etc/kella/agent.yaml`, creates `kella` system user, installs `kella-agent.service`, starts it.
 
 ### 8.2 Enrollment
 1. Agent calls `POST /api/agent/enroll` with enrollment key + host facts.
-2. Cloud returns `serverId` and a per-server `agentToken` (store at `/etc/shield/token`, mode 0600).
+2. Cloud returns `serverId` and a per-server `agentToken` (store at `/etc/kella/token`, mode 0600).
 3. All later calls send `Authorization: Bearer <agentToken>`.
 
 ### 8.3 Detectors (run at start and every 6 h)
@@ -206,23 +206,23 @@ Commands arrive via long-poll. Each command is **signed** by the cloud (Ed25519,
 
 | Command | Implementation | Reversible |
 |---|---|---|
-| `block_ip {ip, ttlSec}` | nftables set `shield_block` with timeout | yes (`unblock_ip`) |
+| `block_ip {ip, ttlSec}` | nftables set `kella_block` with timeout | yes (`unblock_ip`) |
 | `unblock_ip {ip}` | delete from set | — |
 | `hold_sender {sender}` | Postfix: add to `check_sender_access` hash map with `HOLD`, `postmap`, reload | yes |
 | `release_sender {sender}` | remove + `postsuper -H` for that sender's held queue IDs | — |
 | `cap_site_cpu {site, pct}` | systemd slice `CPUQuota` for the site's php-fpm pool | yes |
 | `run_check {name}` | built-in diagnostic (e.g. `postqueue -p` summary) | — |
 
-Safety rules: never block IPs in the allowlist (`/etc/shield/allowlist` + org allowlist from cloud), never block the IP the agent uses to reach the cloud, max 5,000 blocked IPs, every executed command is acked with result.
+Safety rules: never block IPs in the allowlist (`/etc/kella/allowlist` + org allowlist from cloud), never block the IP the agent uses to reach the cloud, max 5,000 blocked IPs, every executed command is acked with result.
 
 ### 8.6 Resource budget
-< 50 MB RSS, < 1% CPU average on a 4-core server. Buffer events on disk (`/var/lib/shield/queue`, max 100 MB) when the cloud is unreachable.
+< 50 MB RSS, < 1% CPU average on a 4-core server. Buffer events on disk (`/var/lib/kella/queue`, max 100 MB) when the cloud is unreachable.
 
 ---
 
 ## 9. Detection rules (Phase 1 built-ins)
 
-Rules are C# classes implementing `IRule` in `Shield.Core/Rules`. Params are overridable per organization.
+Rules are C# classes implementing `IRule` in `Kella.Core/Rules`. Params are overridable per organization.
 
 | Code | Signal | Default threshold | Severity | Playbook |
 |---|---|---|---|---|
@@ -267,7 +267,7 @@ Between → alert with evidence, human decides.
 
 - A Finding joins an open Incident with the same `(organization, tenant or server, type family)` within 2 h; otherwise opens a new one.
 - Incident `status`: `open` → `contained` (all auto actions succeeded) → `resolved` (human or auto after 24 h quiet).
-- Playbook definition (YAML in `Shield.Core/Playbooks/*.yaml`):
+- Playbook definition (YAML in `Kella.Core/Playbooks/*.yaml`):
 
 ```yaml
 finding: mail.account_takeover
@@ -323,7 +323,7 @@ Reply 2 to open the incident
 
 - Triggered asynchronously when an incident is opened or escalates, and for the daily summary.
 - Input: a **context pack** built by code — incident, findings, top evidence (max 50 rows), tenant name, server facts, actions taken. Never raw logs.
-- **Masking** before sending: passwords, tokens, message bodies, email local-parts of non-affected mailboxes, phone numbers. Implemented in `Shield.Core/Ai/Redactor.cs` with unit tests.
+- **Masking** before sending: passwords, tokens, message bodies, email local-parts of non-affected mailboxes, phone numbers. Implemented in `Kella.Core/Ai/Redactor.cs` with unit tests.
 - Output (JSON schema enforced): `{ "what_happened": str, "impact": str, "recommended_actions": [str], "customer_note": str, "confidence": "low|medium|high" }`. Shown in the Incident page "Analysis" box. Language follows the organization's language (`en` or `bn`).
 - Provider is chosen per organization; Ollama option for customers who forbid external AI.
 - The AI never triggers actions by itself.
@@ -366,7 +366,7 @@ All list endpoints: cursor pagination `?cursor=&limit=` (max 200). Errors: RFC 7
 
 ## 15. Web app
 
-Screens (see `docs/design/Shield-Frontend-Design.pdf`):
+Screens (see `docs/design/Kella-Frontend-Design.pdf`):
 1. Overview — status headline, tenant grid (one square per tenant), active incident card, servers table, attacks-blocked chart.
 2. Incident detail — timeline, AI analysis box, pending approvals, impact, top source IPs.
 3. Web Guard site view — traffic chart with event markers, classifier evidence table, actions taken.
@@ -386,7 +386,7 @@ Copy rules: say what happened in plain words ("Hijacked mailbox sending spam"), 
 
 ---
 
-## 16. Security of Shield itself
+## 16. Security of Kella itself
 
 - Agent tokens stored hashed (SHA-256) server-side; rotate via dashboard.
 - Commands signed with Ed25519; private key only in the cloud's secret store.
@@ -441,7 +441,7 @@ Build strictly in this order. A phase is done only when all its acceptance crite
 
 ## 18. Non-goals (do not build)
 
-- Volumetric DDoS scrubbing. Shield orchestrates upstream (Cloudflare API, provider) but does not absorb traffic.
+- Volumetric DDoS scrubbing. Kella orchestrates upstream (Cloudflare API, provider) but does not absorb traffic.
 - Storing raw logs or email contents in the cloud.
 - Windows agent and Kubernetes operator before Phase 6.
 - Any feature where the LLM executes actions without a rule or human approval.

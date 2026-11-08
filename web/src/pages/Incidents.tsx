@@ -60,7 +60,7 @@ export function IncidentDetail() {
 
       <div className="row">
         <section className="panel" style={{ flex: 1.3, minWidth: 320 }}>
-          <h2 style={{ marginBottom: 12 }}>What Shield did</h2>
+          <h2 style={{ marginBottom: 12 }}>What Kella did</h2>
           {done.length === 0 && <div className="cap">No actions yet.</div>}
           <table>
             <tbody>

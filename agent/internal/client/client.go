@@ -1,4 +1,4 @@
-// Package client talks to the Shield cloud API. Outbound HTTPS only.
+// Package client talks to the Kella cloud API. Outbound HTTPS only.
 package client
 
 import (
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/shield/agent/internal/model"
+	"github.com/devshohag/kella/agent/internal/model"
 )
 
 type Client struct {
@@ -85,7 +85,7 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any, gz bo
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	req.Header.Set("User-Agent", "shield-agent")
+	req.Header.Set("User-Agent", "kella-agent")
 
 	res, err := c.http.Do(req)
 	if err != nil {

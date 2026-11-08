@@ -5,13 +5,13 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: shield
-      POSTGRES_PASSWORD: shield-dev-password
-      POSTGRES_DB: shield
+      POSTGRES_USER: kella
+      POSTGRES_PASSWORD: kella-dev-password
+      POSTGRES_DB: kella
     ports: ["5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U shield"]
+      test: ["CMD-SHELL", "pg_isready -U kella"]
       interval: 5s
       retries: 10
 
@@ -28,22 +28,22 @@ services:
     volumes: [vmdata:/victoria-metrics-data]
 
   api:
-    build: { context: ./backend, args: { PROJECT: Shield.Api } }
+    build: { context: ./backend, args: { PROJECT: Kella.Api } }
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5080
-      ConnectionStrings__Postgres: Host=postgres;Database=shield;Username=shield;Password=shield-dev-password
-      Shield__RunPipelineInApi: "true"
-      Shield__WebOrigins__0: http://localhost:8080
+      ConnectionStrings__Postgres: Host=postgres;Database=kella;Username=kella;Password=kella-dev-password
+      Kella__RunPipelineInApi: "true"
+      Kella__WebOrigins__0: http://localhost:8080
     ports: ["5080:5080"]
     depends_on:
       postgres: { condition: service_healthy }
 
   # Enable once NatsEventBus exists (Phase 1); until then the API runs the pipeline in-process.
   # worker:
-  #   build: { context: ./backend, args: { PROJECT: Shield.Worker } }
+  #   build: { context: ./backend, args: { PROJECT: Kella.Worker } }
   #   environment:
-  #     ConnectionStrings__Postgres: Host=postgres;Database=shield;Username=shield;Password=shield-dev-password
+  #     ConnectionStrings__Postgres: Host=postgres;Database=kella;Username=kella;Password=kella-dev-password
   #     Nats__Url: nats://nats:4222
   #   depends_on: [postgres, nats]
 

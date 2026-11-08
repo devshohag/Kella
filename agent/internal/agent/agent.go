@@ -16,14 +16,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/example/shield/agent/internal/actuators"
-	"github.com/example/shield/agent/internal/client"
-	"github.com/example/shield/agent/internal/collect"
-	"github.com/example/shield/agent/internal/config"
-	"github.com/example/shield/agent/internal/detect"
-	"github.com/example/shield/agent/internal/model"
-	"github.com/example/shield/agent/internal/parsers"
-	"github.com/example/shield/agent/internal/tail"
+	"github.com/devshohag/kella/agent/internal/actuators"
+	"github.com/devshohag/kella/agent/internal/client"
+	"github.com/devshohag/kella/agent/internal/collect"
+	"github.com/devshohag/kella/agent/internal/config"
+	"github.com/devshohag/kella/agent/internal/detect"
+	"github.com/devshohag/kella/agent/internal/model"
+	"github.com/devshohag/kella/agent/internal/parsers"
+	"github.com/devshohag/kella/agent/internal/tail"
 )
 
 const Version = "0.1.0"

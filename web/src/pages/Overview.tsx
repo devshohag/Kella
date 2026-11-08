@@ -31,7 +31,7 @@ export function Overview() {
       <section className="panel">
         <div className="panel-head"><h2>Open incidents</h2><Link to="/incidents" className="cap">See all</Link></div>
         {data.activeIncidents.length === 0 ? (
-          <div className="empty">Nothing needs attention. Shield will alert you when something does.</div>
+          <div className="empty">Nothing needs attention. Kella will alert you when something does.</div>
         ) : (
           <table>
             <thead><tr><th>Incident</th><th>What happened</th><th>Severity</th><th>Status</th><th>Opened</th></tr></thead>

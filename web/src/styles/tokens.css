@@ -1,4 +1,4 @@
-/* Design tokens — SPEC §15 and docs/design/Shield-Frontend-Design.pdf. Do not add colors outside this file. */
+/* Design tokens — SPEC §15 and docs/design/Kella-Frontend-Design.pdf. Do not add colors outside this file. */
 @font-face { font-family: Plex; font-weight: 400; src: url(../assets/fonts/plex-400.woff2) format('woff2'); font-display: swap; }
 @font-face { font-family: Plex; font-weight: 500; src: url(../assets/fonts/plex-500.woff2) format('woff2'); font-display: swap; }
 @font-face { font-family: Plex; font-weight: 600; src: url(../assets/fonts/plex-600.woff2) format('woff2'); font-display: swap; }

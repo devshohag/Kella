@@ -3,7 +3,7 @@ bin/
 obj/
 *.user
 # Go
-agent/shield-agent
+agent/kella-agent
 agent/.dev/
 # Web
 node_modules/

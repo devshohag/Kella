@@ -1,4 +1,4 @@
-module github.com/example/shield/agent
+module github.com/devshohag/kella/agent
 
 go 1.24.7
 

@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Kella.Api/Kella.Api.csproj" />
+    <Project Path="src/Kella.Core/Kella.Core.csproj" />
+    <Project Path="src/Kella.Infrastructure/Kella.Infrastructure.csproj" />
+    <Project Path="src/Kella.Worker/Kella.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Kella.Tests/Kella.Tests.csproj" />
+  </Folder>
+</Solution>

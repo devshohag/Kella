@@ -13,7 +13,7 @@ export function Servers() {
     <div className="page">
       <div>
         <h1>Servers</h1>
-        <div className="sub">Run one command on a Linux server. Shield finds what is running and turns on the right protection.</div>
+        <div className="sub">Run one command on a Linux server. Kella finds what is running and turns on the right protection.</div>
       </div>
 
       <section className="panel">

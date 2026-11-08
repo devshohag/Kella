@@ -1,6 +1,6 @@
-# Local development config. Run: go run ./cmd/shield-agent --config ./dev-agent.yaml
+# Local development config. Run: go run ./cmd/kella-agent --config ./dev-agent.yaml
 cloudUrl: http://localhost:5080
-enrollmentKey: sk_dev_local_only        # created by the API's DevSeed in Development
+enrollmentKey: kella_dev_local_only        # created by the API's DevSeed in Development
 tokenPath: ./.dev/token
 statePath: ./.dev/state
 heartbeatInterval: 15s

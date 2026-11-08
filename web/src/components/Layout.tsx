@@ -32,7 +32,7 @@ export function Layout() {
             <path d="M12 1.8l8.6 3.6v6.2c0 5.4-3.6 9.9-8.6 11.2-5-1.3-8.6-5.8-8.6-11.2V5.4z" fill="var(--info)" />
             <path d="M12 6.5v10.5M7.5 10.2h9" stroke="#fff" strokeWidth="2" />
           </svg>
-          Shield
+          Kella
         </div>
         <nav aria-label="Main">
           {nav.map((n) => <Item key={n.to} {...n} />)}

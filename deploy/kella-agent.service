@@ -1,0 +1,19 @@
+[Unit]
+Description=Kella security agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/kella-agent --config /etc/kella/agent.yaml
+Restart=always
+RestartSec=5
+# Runs as root because it reads protected logs and manages nftables.
+# TODO(Phase 1): drop to a dedicated user with CAP_NET_ADMIN + adm group once actuators allow it.
+MemoryMax=100M
+CPUQuota=10%
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

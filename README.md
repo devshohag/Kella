@@ -1,10 +1,10 @@
-# Shield
+# Kella
 
-Multi-tenant security and reliability platform for companies that run mail, web, voice and cloud infrastructure for other people. One command installs an agent; Shield detects what runs on the server, protects it, and tells you about real emergencies on WhatsApp, Telegram, email or a phone call.
+Multi-tenant security and reliability platform for companies that run mail, web, voice and cloud infrastructure for other people. One command installs an agent; Kella detects what runs on the server, protects it, and tells you about real emergencies on WhatsApp, Telegram, email or a phone call.
 
 - **Product and technical spec:** [docs/SPEC.md](docs/SPEC.md)
 - **Rules for coding agents:** [CLAUDE.md](CLAUDE.md)
-- **Target screens:** [docs/design/Shield-Frontend-Design.pdf](docs/design/Shield-Frontend-Design.pdf)
+- **Target screens:** [docs/design/Kella-Frontend-Design.pdf](docs/design/Kella-Frontend-Design.pdf)
 
 ## Run it locally in 2 minutes (no Docker needed)
 
@@ -12,14 +12,14 @@ Requires .NET 10 SDK, Go 1.24+, Node 22+.
 
 ```bash
 # 1. API (in-memory database, demo organization, no login in Development)
-cd backend && dotnet run --project src/Shield.Api            # http://localhost:5080
+cd backend && dotnet run --project src/Kella.Api            # http://localhost:5080
 
 # 2. Web dashboard
 cd web && npm install && npm run dev                          # http://localhost:5173
 
 # 3. Agent on your own machine, in dry-run mode
 cd agent && mkdir -p .dev && touch .dev/auth.log
-go run ./cmd/shield-agent --config ./dev-agent.yaml
+go run ./cmd/kella-agent --config ./dev-agent.yaml
 
 # 4. Simulate an SSH attack and watch an incident appear in the dashboard
 for i in $(seq 1 12); do
@@ -27,7 +27,7 @@ for i in $(seq 1 12); do
 done
 ```
 
-The agent logs `dry run: nft add element inet shield shield_block { 45.148.10.92 timeout 86400s }` and the dashboard shows the incident with the block marked as done.
+The agent logs `dry run: nft add element inet kella kella_block { 45.148.10.92 timeout 86400s }` and the dashboard shows the incident with the block marked as done.
 
 ## Run the full stack with Docker
 
@@ -46,7 +46,7 @@ cd web && npm run lint && npm run build
 ## Repository
 
 ```
-backend/   .NET 10: Shield.Core, Shield.Infrastructure, Shield.Api, Shield.Worker, tests
+backend/   .NET 10: Kella.Core, Kella.Infrastructure, Kella.Api, Kella.Worker, tests
 agent/     Go agent: detection, metrics, log parsers, cloud client, actuators
 web/       React + TypeScript + Vite dashboard
 deploy/    install.sh, systemd unit
