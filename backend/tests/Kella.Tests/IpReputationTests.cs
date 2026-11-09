@@ -4,6 +4,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Kella.Api;
+using Kella.Core;
 using Kella.Core.Domain;
 using Kella.Infrastructure.Data;
 using Kella.Infrastructure.Pipeline;
@@ -130,6 +131,81 @@ public class IpReputationTests : IClassFixture<WebApplicationFactory<Program>>
             var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
             var incidents = await db.Incidents.IgnoreQueryFilters().Where(i => i.OrganizationId == orgId).ToListAsync();
             Assert.Equal(2, incidents.Count); // Still exactly 2 incidents!
+        }
+    }
+
+    private sealed class ThrowingAlertRouter : IAlertRouter
+    {
+        public Task RouteAsync(Incident incident, CancellationToken ct)
+        {
+            throw new InvalidOperationException("AlertRouter failure simulation");
+        }
+    }
+
+    [Fact]
+    public async Task Router_throws_does_not_abort_loop_and_contained_incidents_are_resolved_on_delist()
+    {
+        var mockDns = new MockDnsResolver();
+        mockDns.ResolveHandler = _ => [IPAddress.Parse("127.0.0.2")];
+
+        using var factory = _factory.WithWebHostBuilder(b =>
+        {
+            b.ConfigureServices(services =>
+            {
+                services.AddSingleton<IDnsResolver>(mockDns);
+                services.AddScoped<IAlertRouter, ThrowingAlertRouter>();
+            });
+        });
+
+        Guid orgId;
+        Guid srv1Id;
+        Guid srv2Id;
+        var ip1 = "198.51.100.11";
+        var ip2 = "198.51.100.22";
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+            var org = new Organization { Name = "Router Throw Org" };
+            db.Organizations.Add(org);
+            var srv1 = new Server { OrganizationId = org.Id, Name = "srv-1", PublicIp = ip1, Status = ServerStatus.Online };
+            var srv2 = new Server { OrganizationId = org.Id, Name = "srv-2", PublicIp = ip2, Status = ServerStatus.Online };
+            db.Servers.AddRange(srv1, srv2);
+            await db.SaveChangesAsync();
+
+            orgId = org.Id;
+            srv1Id = srv1.Id;
+            srv2Id = srv2.Id;
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<IpReputationService>();
+
+            // When router throws, CheckReputationAsync must NOT abort:
+            // BOTH srv1 and srv2 must be checked and have their state saved in IpReputations!
+            await service.CheckReputationAsync();
+
+            var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+            var reps = await db.IpReputations.IgnoreQueryFilters().Where(r => r.OrganizationId == orgId).ToListAsync();
+
+            Assert.Equal(2, reps.Count);
+            Assert.Contains(reps, r => r.Ip == ip1 && r.Listed);
+            Assert.Contains(reps, r => r.Ip == ip2 && r.Listed);
+
+            // Change one incident's status to Contained
+            var inc1 = await db.Incidents.IgnoreQueryFilters().FirstAsync(i => i.OrganizationId == orgId && i.ServerId == srv1Id);
+            inc1.Status = IncidentStatus.Contained;
+            await db.SaveChangesAsync();
+
+            // Delist
+            mockDns.ResolveHandler = _ => Array.Empty<IPAddress>();
+            await service.CheckReputationAsync();
+
+            // Assert inc1 (which was Contained) is now Resolved!
+            var updatedInc1 = await db.Incidents.AsNoTracking().IgnoreQueryFilters().FirstAsync(i => i.Id == inc1.Id);
+            Assert.Equal(IncidentStatus.Resolved, updatedInc1.Status);
+            Assert.NotNull(updatedInc1.ResolvedAt);
         }
     }
 }

@@ -153,7 +153,7 @@ public sealed class IpReputationService(
                             .Where(i => i.OrganizationId == target.OrganizationId &&
                                         i.ServerId == target.ServerId &&
                                         i.Type == "mail.ip_reputation" &&
-                                        i.Status == IncidentStatus.Open)
+                                        (i.Status == IncidentStatus.Open || i.Status == IncidentStatus.Contained))
                             .OrderByDescending(i => i.OpenedAt)
                             .FirstOrDefaultAsync(ct);
 
@@ -171,7 +171,7 @@ public sealed class IpReputationService(
         }
     }
 
-    private static async Task OpenIncidentAsync(
+    private async Task OpenIncidentAsync(
         IServiceScope scope,
         KellaDbContext db,
         Guid organizationId,
@@ -218,7 +218,15 @@ public sealed class IpReputationService(
         });
 
         await db.SaveChangesAsync(ct);
-        await alertRouter.RouteAsync(inc, ct);
+
+        try
+        {
+            await alertRouter.RouteAsync(inc, ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Failed to route alert for DNSBL incident {IncidentId} for IP {Ip}", inc.Id, publicIp);
+        }
     }
 
     public async Task<(DnsblStatus Status, string? ReturnCode)> CheckDnsblAsync(
