@@ -63,7 +63,7 @@ public class BaselineTests : IClassFixture<WebApplicationFactory<Program>>
                 Ts = nonUtcTs.AddSeconds(i),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = "user@example.com" }
+                Attrs = new() { ["sender"] = "user@example.com", ["authenticated"] = "true" }
             };
             var m = rule.Evaluate(evt);
             if (m != null) matches.Add(m);
@@ -101,7 +101,7 @@ public class BaselineTests : IClassFixture<WebApplicationFactory<Program>>
                 Ts = t0.AddSeconds(i),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = "sender1@example.com" }
+                Attrs = new() { ["sender"] = "sender1@example.com", ["authenticated"] = "true" }
             };
             var m = rule.Evaluate(evt);
             if (m != null) sender1Matches.Add(m);
@@ -118,7 +118,7 @@ public class BaselineTests : IClassFixture<WebApplicationFactory<Program>>
                 Ts = t0.AddSeconds(i),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = "sender1@example.com" }
+                Attrs = new() { ["sender"] = "sender1@example.com", ["authenticated"] = "true" }
             };
             var m = rule.Evaluate(evt);
             if (m != null) sender1Matches.Add(m);
@@ -137,7 +137,7 @@ public class BaselineTests : IClassFixture<WebApplicationFactory<Program>>
                 Ts = t0.AddSeconds(i),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = "sender2@example.com" }
+                Attrs = new() { ["sender"] = "sender2@example.com", ["authenticated"] = "true" }
             };
             var m = rule.Evaluate(evt);
             if (m != null) sender2Matches.Add(m);
@@ -152,7 +152,7 @@ public class BaselineTests : IClassFixture<WebApplicationFactory<Program>>
             Ts = t0.AddSeconds(50),
             Module = Modules.Mail,
             Type = EventTypes.MailMessageQueued,
-            Attrs = new() { ["sender"] = "sender2@example.com" }
+            Attrs = new() { ["sender"] = "sender2@example.com", ["authenticated"] = "true" }
         };
         var matchSender2At50 = rule.Evaluate(evt50);
         Assert.NotNull(matchSender2At50);
@@ -187,7 +187,7 @@ public class BaselineTests : IClassFixture<WebApplicationFactory<Program>>
                     Ts = eventTs.AddMinutes(m * 10),
                     Module = Modules.Mail,
                     Type = EventTypes.MailMessageQueued,
-                    Attrs = new() { ["sender"] = "sender24h@test.org" }
+                    Attrs = new() { ["sender"] = "sender24h@test.org", ["authenticated"] = "true" }
                 });
             }
         }
@@ -205,7 +205,7 @@ public class BaselineTests : IClassFixture<WebApplicationFactory<Program>>
                     Ts = eventTs.AddMinutes(m * 10),
                     Module = Modules.Mail,
                     Type = EventTypes.MailMessageQueued,
-                    Attrs = new() { ["sender"] = "sender5h@test.org" }
+                    Attrs = new() { ["sender"] = "sender5h@test.org", ["authenticated"] = "true" }
                 });
             }
         }

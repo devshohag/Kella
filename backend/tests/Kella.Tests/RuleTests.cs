@@ -83,7 +83,7 @@ public class RuleTests
                 Ts = t0.AddSeconds(i * 10),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = "billing@rahmantraders.com" }
+                Attrs = new() { ["sender"] = "billing@rahmantraders.com", ["authenticated"] = "true" }
             };
             Assert.Null(rule.Evaluate(evt));
         }
@@ -95,7 +95,7 @@ public class RuleTests
             Ts = t0.AddSeconds(50),
             Module = Modules.Mail,
             Type = EventTypes.MailMessageQueued,
-            Attrs = new() { ["sender"] = "billing@rahmantraders.com" }
+            Attrs = new() { ["sender"] = "billing@rahmantraders.com", ["authenticated"] = "true" }
         };
 
         var match = rule.Evaluate(spikeEvt);
@@ -131,7 +131,7 @@ public class RuleTests
                 Ts = t0.AddSeconds(i),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = "highvolume@provider.com" }
+                Attrs = new() { ["sender"] = "highvolume@provider.com", ["authenticated"] = "true" }
             };
             lastMatch = rule.Evaluate(evt);
         }
@@ -147,7 +147,7 @@ public class RuleTests
                 Ts = t0.AddSeconds(i),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = "highvolume@provider.com" }
+                Attrs = new() { ["sender"] = "highvolume@provider.com", ["authenticated"] = "true" }
             };
             lastMatch = rule.Evaluate(evt);
         }
@@ -172,7 +172,7 @@ public class RuleTests
                 Ts = t0.AddSeconds(i * 10),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = "normal@user.com" }
+                Attrs = new() { ["sender"] = "normal@user.com", ["authenticated"] = "true" }
             };
             Assert.Null(rule.Evaluate(queueEvt));
         }
@@ -202,7 +202,7 @@ public class RuleTests
                 Ts = t0.AddMinutes(15).AddSeconds(i * 5),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = "hacked@user.com" }
+                Attrs = new() { ["sender"] = "hacked@user.com", ["authenticated"] = "true" }
             };
             Assert.Null(rule.Evaluate(queueEvt));
         }
@@ -214,7 +214,7 @@ public class RuleTests
             Ts = t0.AddMinutes(16),
             Module = Modules.Mail,
             Type = EventTypes.MailMessageQueued,
-            Attrs = new() { ["sender"] = "hacked@user.com" }
+            Attrs = new() { ["sender"] = "hacked@user.com", ["authenticated"] = "true" }
         };
 
         var match = rule.Evaluate(triggerEvt);
@@ -251,7 +251,7 @@ public class RuleTests
             Ts = t0.AddSeconds(10),
             Module = Modules.Mail,
             Type = EventTypes.MailMessageQueued,
-            Attrs = new() { ["sender"] = "victim@example.com" }
+            Attrs = new() { ["sender"] = "victim@example.com", ["authenticated"] = "true" }
         });
 
         Assert.NotNull(match);
@@ -260,5 +260,69 @@ public class RuleTests
         Assert.Equal(ActionKinds.HoldSender, action.Kind);
         Assert.Equal(ActionMode.Auto, action.Mode);
         Assert.DoesNotContain(match.Actions, a => a.Mode == ActionMode.Approval);
+    }
+
+    [Fact]
+    public void Incoming_messages_without_authenticated_true_do_not_trigger_outbound_spike()
+    {
+        var rule = new MailOutboundSpikeRule(minSpikeCount: 100);
+        var t0 = DateTimeOffset.UtcNow;
+        RuleMatch? match = null;
+
+        // 500 incoming messages from external sender without authentication
+        for (int i = 0; i < 500; i++)
+        {
+            var evt = new KellaEvent
+            {
+                OrganizationId = Guid.NewGuid(),
+                ServerId = Server,
+                Ts = t0.AddSeconds(i),
+                Module = Modules.Mail,
+                Type = EventTypes.MailMessageQueued,
+                Attrs = new()
+                {
+                    ["sender"] = "external@sender.com",
+                    ["authenticated"] = "false"
+                }
+            };
+            match = rule.Evaluate(evt);
+            if (match != null) break;
+        }
+
+        Assert.Null(match);
+    }
+
+    [Fact]
+    public void Authenticated_messages_trigger_outbound_spike_and_hold_sender_uses_sasl_username()
+    {
+        var rule = new MailOutboundSpikeRule(minSpikeCount: 100);
+        var t0 = DateTimeOffset.UtcNow;
+        RuleMatch? match = null;
+
+        // 500 authenticated messages from our user with spoofed envelope sender
+        for (int i = 0; i < 500; i++)
+        {
+            var evt = new KellaEvent
+            {
+                OrganizationId = Guid.NewGuid(),
+                ServerId = Server,
+                Ts = t0.AddSeconds(i),
+                Module = Modules.Mail,
+                Type = EventTypes.MailMessageQueued,
+                Attrs = new()
+                {
+                    ["sender"] = "spoofed@external.com",
+                    ["sasl_username"] = "legit@ourcompany.com",
+                    ["authenticated"] = "true"
+                }
+            };
+            match = rule.Evaluate(evt);
+            if (match != null) break;
+        }
+
+        Assert.NotNull(match);
+        var holdAction = Assert.Single(match.Actions);
+        Assert.Equal(ActionKinds.HoldSender, holdAction.Kind);
+        Assert.Equal("legit@ourcompany.com", holdAction.Params["sender"]);
     }
 }

@@ -87,7 +87,7 @@ public class RuleEngineDeduplicationTests : IClassFixture<WebApplicationFactory<
                 Ts = t0,
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = sender }
+                Attrs = new() { ["sender"] = sender, ["authenticated"] = "true" }
             };
 
             await service.PersistMatchAsync(spikeEvt, spikeMatch);
@@ -110,7 +110,7 @@ public class RuleEngineDeduplicationTests : IClassFixture<WebApplicationFactory<
                 Ts = t0.AddMinutes(30),
                 Module = Modules.Mail,
                 Type = EventTypes.MailMessageQueued,
-                Attrs = new() { ["sender"] = sender }
+                Attrs = new() { ["sender"] = sender, ["authenticated"] = "true" }
             };
 
             await service.PersistMatchAsync(takeoverEvt, takeoverMatch);

@@ -53,11 +53,22 @@ public sealed class BaselineWriterService(
             .ToListAsync(ct);
 
         var bySender = events
-            .Where(e => e.Attrs.TryGetValue("sender", out var s) && !string.IsNullOrWhiteSpace(s))
+            .Where(e => e.Attrs.TryGetValue("authenticated", out var a) && string.Equals(a, "true", StringComparison.OrdinalIgnoreCase))
+            .Select(e =>
+            {
+                string sender = "";
+                if (e.Attrs.TryGetValue("sasl_username", out var su) && !string.IsNullOrWhiteSpace(su))
+                    sender = su.Trim().ToLowerInvariant();
+                else if (e.Attrs.TryGetValue("sender", out var s) && !string.IsNullOrWhiteSpace(s))
+                    sender = s.Trim().ToLowerInvariant();
+
+                return new { e.OrganizationId, e.ServerId, e.Ts, Sender = sender };
+            })
+            .Where(e => !string.IsNullOrWhiteSpace(e.Sender))
             .GroupBy(e => (
                 e.OrganizationId,
                 e.ServerId,
-                Sender: e.Attrs["sender"].Trim().ToLowerInvariant()
+                e.Sender
             ));
 
         foreach (var group in bySender)

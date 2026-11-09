@@ -27,10 +27,24 @@ public sealed class MailOutboundSpikeRule : IRule
 
     public RuleMatch? Evaluate(KellaEvent evt)
     {
-        if (!evt.Attrs.TryGetValue("sender", out var sender) || string.IsNullOrWhiteSpace(sender))
+        if (!evt.Attrs.TryGetValue("authenticated", out var auth) || !string.Equals(auth, "true", StringComparison.OrdinalIgnoreCase))
             return null;
 
-        var senderLower = sender.Trim().ToLowerInvariant();
+        string sender;
+        if (evt.Attrs.TryGetValue("sasl_username", out var saslUser) && !string.IsNullOrWhiteSpace(saslUser))
+        {
+            sender = saslUser.Trim();
+        }
+        else if (evt.Attrs.TryGetValue("sender", out var envSender) && !string.IsNullOrWhiteSpace(envSender))
+        {
+            sender = envSender.Trim();
+        }
+        else
+        {
+            return null;
+        }
+
+        var senderLower = sender.ToLowerInvariant();
         var key = $"{evt.ServerId}:{senderLower}";
         var count = _counter.Add(key, evt.Ts);
 
@@ -71,19 +85,14 @@ public sealed class MailOutboundSpikeRule : IRule
             Code,
             Severity.Critical,
             $"Outbound email spike from {sender}",
-            $"{count} messages queued by {sender} in 10 minutes (exceeds threshold of {_minSpikeCount}).",
+            $"{count} messages queued by {sender} in 10 minutes (exceeds threshold of {_minSpikeCount}). Note: Password reset must be done manually by the admin.",
             evidence,
             [
                 new SuggestedAction(
                     ActionKinds.HoldSender,
                     new Dictionary<string, string> { ["sender"] = sender },
                     ActionMode.Auto,
-                    $"Hold messages from {sender}"),
-                new SuggestedAction(
-                    ActionKinds.ResetMailboxPassword,
-                    new Dictionary<string, string> { ["mailbox"] = sender },
-                    ActionMode.Approval,
-                    $"Reset password for {sender}"),
+                    $"Hold messages from {sender}")
             ]);
     }
 }
@@ -124,8 +133,22 @@ public sealed class MailAccountTakeoverRule : IRule
 
         if (evt.Type == Events.EventTypes.MailMessageQueued)
         {
-            if (!evt.Attrs.TryGetValue("sender", out var sender) || string.IsNullOrWhiteSpace(sender))
+            if (!evt.Attrs.TryGetValue("authenticated", out var auth) || !string.Equals(auth, "true", StringComparison.OrdinalIgnoreCase))
                 return null;
+
+            string sender;
+            if (evt.Attrs.TryGetValue("sasl_username", out var saslUser) && !string.IsNullOrWhiteSpace(saslUser))
+            {
+                sender = saslUser.Trim();
+            }
+            else if (evt.Attrs.TryGetValue("sender", out var envSender) && !string.IsNullOrWhiteSpace(envSender))
+            {
+                sender = envSender.Trim();
+            }
+            else
+            {
+                return null;
+            }
 
             var key = $"{evt.ServerId}:{sender.ToLowerInvariant()}";
 

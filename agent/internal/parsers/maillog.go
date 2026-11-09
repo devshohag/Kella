@@ -2,6 +2,7 @@ package parsers
 
 import (
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/devshohag/kella/agent/internal/model"
@@ -23,13 +24,65 @@ var (
 	// e.g., postfix/smtpd[1234]: warning: mail.example.com[198.51.100.55]: SASL PLAIN authentication failed: authentication failure
 	postfixSaslFailed = regexp.MustCompile(`postfix/smtpd\[\d+\]: warning: [^\[]*\[([0-9a-fA-F.:]+)\]: SASL (?:LOGIN|PLAIN|DIGEST-MDMS|CRAM-MD5) authentication failed`)
 
+	// Postfix smtpd SASL authenticated client line
+	// e.g., postfix/smtpd[4512]: 4Sxyz91234z: client=unknown[198.51.100.55], sasl_method=PLAIN, sasl_username=user@domain.com
+	postfixSmtpdSaslUser = regexp.MustCompile(`postfix/(?:submission/)?smtpd\[\d+\]: ([A-Za-z0-9]+): .*?sasl_username=([^\s,]+)`)
+
 	// Postfix qmgr queued message
 	// e.g., postfix/qmgr[2345]: 4Sxyz91234z: from=<spammer@badtenant.com>, size=4521, nrcpt=50 (queue active)
 	postfixQueued = regexp.MustCompile(`postfix/qmgr\[\d+\]: ([A-Za-z0-9]+): from=<([^>]*)>, size=(\d+), nrcpt=(\d+)`)
 )
 
+type queueEntry struct {
+	saslUser string
+	ts       time.Time
+}
+
+// MailParser parses mail log lines while tracking SASL authentication context for outbound queues.
+type MailParser struct {
+	mu         sync.Mutex
+	queueUsers map[string]queueEntry
+}
+
+// NewMailParser creates a new MailParser instance.
+func NewMailParser() *MailParser {
+	return &MailParser{
+		queueUsers: make(map[string]queueEntry),
+	}
+}
+
+var defaultMailParser = NewMailParser()
+
 // ParseMailLine parses a line from /var/log/mail.log or journald mail logs (SPEC §7).
 func ParseMailLine(line string, now time.Time) *model.Event {
+	return defaultMailParser.Parse(line, now)
+}
+
+// Parse processes a single log line with queue tracking.
+func (p *MailParser) Parse(line string, now time.Time) *model.Event {
+	if m := postfixSmtpdSaslUser.FindStringSubmatch(line); m != nil {
+		p.mu.Lock()
+		if len(p.queueUsers) >= 10000 {
+			for qid, entry := range p.queueUsers {
+				if now.Sub(entry.ts) > 10*time.Minute {
+					delete(p.queueUsers, qid)
+				}
+			}
+			if len(p.queueUsers) >= 10000 {
+				for qid := range p.queueUsers {
+					delete(p.queueUsers, qid)
+					break
+				}
+			}
+		}
+		p.queueUsers[m[1]] = queueEntry{
+			saslUser: m[2],
+			ts:       now,
+		}
+		p.mu.Unlock()
+		return nil
+	}
+
 	if m := dovecotFailed.FindStringSubmatch(line); m != nil {
 		return &model.Event{
 			Ts:       now,
@@ -72,21 +125,43 @@ func ParseMailLine(line string, now time.Time) *model.Event {
 	}
 
 	if m := postfixQueued.FindStringSubmatch(line); m != nil {
+		queueID := m[1]
 		sender := m[2]
 		if sender == "" {
 			sender = "MAILER-DAEMON"
 		}
+
+		p.mu.Lock()
+		entry, found := p.queueUsers[queueID]
+		if found {
+			delete(p.queueUsers, queueID)
+		}
+		p.mu.Unlock()
+
+		authenticated := "false"
+		var saslUser string
+		if found && now.Sub(entry.ts) <= 10*time.Minute {
+			authenticated = "true"
+			saslUser = entry.saslUser
+		}
+
+		attrs := map[string]string{
+			"queueId":       queueID,
+			"sender":        sender,
+			"size":          m[3],
+			"recipients":    m[4],
+			"authenticated": authenticated,
+		}
+		if authenticated == "true" {
+			attrs["sasl_username"] = saslUser
+		}
+
 		return &model.Event{
 			Ts:       now,
 			Module:   "mail",
 			Type:     model.TypeMailMessageQueue,
 			Severity: "info",
-			Attrs: map[string]string{
-				"queueId":    m[1],
-				"sender":     sender,
-				"size":       m[3],
-				"recipients": m[4],
-			},
+			Attrs:    attrs,
 		}
 	}
 

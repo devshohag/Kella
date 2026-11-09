@@ -118,3 +118,44 @@ func TestMailLogSample(t *testing.T) {
 		t.Errorf("expected 2 message_queued, got %d", counts[model.TypeMailMessageQueue])
 	}
 }
+
+func TestParseMailLine_AuthenticatedVsInbound(t *testing.T) {
+	parser := NewMailParser()
+	now := time.Date(2026, 11, 8, 2, 14, 0, 0, time.UTC)
+
+	// Real Postfix capture: smtpd client authentication followed by qmgr
+	smtpdLine := "Nov  8 02:14:55 mail-01 postfix/smtpd[4512]: 4Sxyz91234z: client=unknown[198.51.100.55], sasl_method=PLAIN, sasl_username=user@domain.com"
+	qmgrLineAuth := "Nov  8 02:14:56 mail-01 postfix/qmgr[2345]: 4Sxyz91234z: from=<spoofed@external.com>, size=4521, nrcpt=1 (queue active)"
+
+	ev1 := parser.Parse(smtpdLine, now)
+	if ev1 != nil {
+		t.Fatalf("expected nil event for smtpd sasl line, got %+v", ev1)
+	}
+
+	ev2 := parser.Parse(qmgrLineAuth, now.Add(time.Second))
+	if ev2 == nil {
+		t.Fatalf("expected event for qmgr line, got nil")
+	}
+	if ev2.Attrs["authenticated"] != "true" {
+		t.Errorf("got authenticated %q, want 'true'", ev2.Attrs["authenticated"])
+	}
+	if ev2.Attrs["sasl_username"] != "user@domain.com" {
+		t.Errorf("got sasl_username %q, want 'user@domain.com'", ev2.Attrs["sasl_username"])
+	}
+	if ev2.Attrs["sender"] != "spoofed@external.com" {
+		t.Errorf("got sender %q, want 'spoofed@external.com'", ev2.Attrs["sender"])
+	}
+
+	// Incoming message without SASL authentication
+	qmgrLineInbound := "Nov  8 02:15:00 mail-01 postfix/qmgr[2345]: 4Sinbound999z: from=<external@outside.com>, size=1200, nrcpt=1 (queue active)"
+	ev3 := parser.Parse(qmgrLineInbound, now.Add(2*time.Second))
+	if ev3 == nil {
+		t.Fatalf("expected event for inbound qmgr line, got nil")
+	}
+	if ev3.Attrs["authenticated"] != "false" {
+		t.Errorf("got authenticated %q, want 'false'", ev3.Attrs["authenticated"])
+	}
+	if _, ok := ev3.Attrs["sasl_username"]; ok {
+		t.Errorf("expected no sasl_username for inbound mail, got %q", ev3.Attrs["sasl_username"])
+	}
+}
