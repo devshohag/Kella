@@ -22,7 +22,14 @@ var (
 	// Postfix smtpd SASL authentication failure
 	// e.g., postfix/smtpd[1234]: warning: unknown[198.51.100.55]: SASL LOGIN authentication failed: UGFzc3dvcmQ6
 	// e.g., postfix/smtpd[1234]: warning: mail.example.com[198.51.100.55]: SASL PLAIN authentication failed: authentication failure
-	postfixSaslFailed = regexp.MustCompile(`postfix/smtpd\[\d+\]: warning: [^\[]*\[([0-9a-fA-F.:]+)\]: SASL (?:LOGIN|PLAIN|DIGEST-MD5|CRAM-MD5) authentication failed`)
+	// Source: official Postfix documentation
+	postfixSaslFailed = regexp.MustCompile(`postfix/(?:submission/)?smtpd\[(\d+)\]: warning: [^\[]*\[([0-9a-fA-F.:]+)\]: SASL (?:LOGIN|PLAIN|DIGEST-MD5|CRAM-MD5) authentication failed(?::\s*(?:.*?(?:user=<([^>]+)>|username=([^\s,]+)))?)?`)
+
+	// Postfix smtpd disconnect with failed authentication or lost connection after AUTH
+	// e.g., postfix/smtpd[4512]: disconnect from unknown[198.51.100.55] ehlo=1 auth=0/1 quit=1 commands=2/3
+	// e.g., postfix/smtpd[4512]: lost connection after AUTH from unknown[198.51.100.55]
+	// Source: official Postfix documentation
+	postfixDisconnectAuthFailed = regexp.MustCompile(`postfix/(?:submission/)?smtpd\[(\d+)\]: (?:disconnect from [^\[]*\[([0-9a-fA-F.:]+)\].*?auth=0/\d+|lost connection after AUTH from [^\[]*\[([0-9a-fA-F.:]+)\])`)
 
 	// Postfix smtpd SASL authenticated client line
 	// e.g., postfix/smtpd[4512]: 4Sxyz91234z: client=unknown[198.51.100.55], sasl_method=PLAIN, sasl_username=user@domain.com
@@ -112,12 +119,39 @@ func (p *MailParser) Parse(line string, now time.Time) *model.Event {
 	}
 
 	if m := postfixSaslFailed.FindStringSubmatch(line); m != nil {
+		attrs := map[string]string{
+			"service": "postfix-smtpd",
+		}
+		user := ""
+		if len(m) > 3 && m[3] != "" {
+			user = m[3]
+		} else if len(m) > 4 && m[4] != "" {
+			user = m[4]
+		}
+		if user != "" {
+			attrs["user"] = user
+		}
 		return &model.Event{
 			Ts:       now,
 			Module:   "mail",
 			Type:     model.TypeMailAuthFailed,
 			Severity: "info",
-			SourceIP: m[1],
+			SourceIP: m[2],
+			Attrs:    attrs,
+		}
+	}
+
+	if m := postfixDisconnectAuthFailed.FindStringSubmatch(line); m != nil {
+		ip := m[2]
+		if ip == "" && len(m) > 3 {
+			ip = m[3]
+		}
+		return &model.Event{
+			Ts:       now,
+			Module:   "mail",
+			Type:     model.TypeMailAuthFailed,
+			Severity: "info",
+			SourceIP: ip,
 			Attrs: map[string]string{
 				"service": "postfix-smtpd",
 			},

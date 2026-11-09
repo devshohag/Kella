@@ -49,8 +49,33 @@ func TestParseMailLine(t *testing.T) {
 			wantUser: "sales@acme.com",
 		},
 		{
-			name:     "Postfix smtpd SASL failure",
+			// Source: Official Postfix documentation sample
+			name:     "Postfix smtpd SASL failure without username",
 			line:     "Nov  8 02:14:15 mail-01 postfix/smtpd[4512]: warning: unknown[198.51.100.55]: SASL LOGIN authentication failed: UGFzc3dvcmQ6",
+			wantType: model.TypeMailAuthFailed,
+			wantIP:   "198.51.100.55",
+			wantUser: "",
+		},
+		{
+			// Source: Official Postfix documentation sample with user
+			name:     "Postfix smtpd SASL failure with username",
+			line:     "Nov  8 02:14:15 mail-01 postfix/smtpd[4512]: warning: unknown[198.51.100.55]: SASL PLAIN authentication failed: authentication failure: user=<victim@example.com>",
+			wantType: model.TypeMailAuthFailed,
+			wantIP:   "198.51.100.55",
+			wantUser: "victim@example.com",
+		},
+		{
+			// Source: Official Postfix documentation sample: disconnect auth=0/1
+			name:     "Postfix smtpd disconnect auth failed",
+			line:     "Nov  8 02:14:16 mail-01 postfix/smtpd[4512]: disconnect from unknown[198.51.100.55] ehlo=1 auth=0/1 quit=1 commands=2/3",
+			wantType: model.TypeMailAuthFailed,
+			wantIP:   "198.51.100.55",
+			wantUser: "",
+		},
+		{
+			// Source: Official Postfix documentation sample: lost connection after AUTH
+			name:     "Postfix smtpd lost connection after AUTH",
+			line:     "Nov  8 02:14:16 mail-01 postfix/smtpd[4512]: lost connection after AUTH from unknown[198.51.100.55]",
 			wantType: model.TypeMailAuthFailed,
 			wantIP:   "198.51.100.55",
 			wantUser: "",
