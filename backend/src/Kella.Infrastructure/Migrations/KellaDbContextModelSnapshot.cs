@@ -72,6 +72,10 @@ namespace Kella.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.PrimitiveCollection<List<Guid>>("ActionIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
                     b.Property<string>("Channel")
                         .IsRequired()
                         .HasColumnType("text");
@@ -81,6 +85,9 @@ namespace Kella.Infrastructure.Migrations
 
                     b.Property<Guid>("IncidentId")
                         .HasColumnType("uuid");
+
+                    b.Property<long?>("MessageId")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid");
@@ -94,6 +101,9 @@ namespace Kella.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset?>("SentAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("Severity")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Status")
                         .IsRequired()

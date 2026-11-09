@@ -203,6 +203,9 @@ public sealed class AlertDelivery : Entity, IOrgScoped
     public string Status { get; set; } = "pending";
     public DateTimeOffset? SentAt { get; set; }
     public string? Reply { get; set; }
+    public long? MessageId { get; set; }
+    public Severity? Severity { get; set; }
+    public List<Guid> ActionIds { get; set; } = [];
 }
 
 /// <summary>Rolling hourly percentiles per entity (SPEC §9).</summary>

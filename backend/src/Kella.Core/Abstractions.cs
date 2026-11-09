@@ -38,12 +38,19 @@ public interface IRule
 
 public enum AlertChannelKind { Email, Telegram, WhatsApp, Voice }
 
-public sealed record AlertMessage(Guid IncidentId, int IncidentNumber, Severity Severity, string Title, string Body, IReadOnlyList<string> ReplyOptions);
+public sealed record AlertMessage(
+    Guid IncidentId,
+    int IncidentNumber,
+    Severity Severity,
+    string Title,
+    string Body,
+    IReadOnlyList<string> ReplyOptions,
+    long? ReplyToMessageId = null);
 
 public interface IAlertChannel
 {
     AlertChannelKind Kind { get; }
-    Task SendAsync(User recipient, AlertMessage message, CancellationToken ct);
+    Task<long?> SendAsync(User recipient, AlertMessage message, CancellationToken ct);
 }
 
 /// <summary>Routes an incident to the organization's channels and records each delivery (SPEC §12).</summary>

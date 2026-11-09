@@ -29,6 +29,39 @@ public sealed class AlertRouter(
 
     public async Task RouteAsync(Incident incident, CancellationToken ct)
     {
+        var pendingActions = await db.Actions
+            .Where(a => a.IncidentId == incident.Id && a.Status == ActionStatus.PendingApproval)
+            .OrderBy(a => a.CreatedAt).ThenBy(a => a.Id)
+            .ToListAsync(ct);
+        var pendingActionIds = pendingActions.Select(a => a.Id).ToList();
+        var approvals = pendingActions
+            .Select(a => a.Label ?? a.Kind)
+            .ToList();
+
+        var priorDeliveries = await db.AlertDeliveries
+            .Where(d => d.IncidentId == incident.Id && d.Status == "sent")
+            .OrderBy(d => d.CreatedAt)
+            .ToListAsync(ct);
+
+        long? replyToMessageId = null;
+        if (priorDeliveries.Count > 0)
+        {
+            var maxPriorSeverity = priorDeliveries.Max(d => d.Severity ?? Severity.Info);
+            bool severityIncreased = incident.Severity > maxPriorSeverity;
+
+            var priorActionIds = priorDeliveries.SelectMany(d => d.ActionIds).ToHashSet();
+            bool newApprovalAction = pendingActionIds.Any(id => !priorActionIds.Contains(id));
+
+            if (!severityIncreased && !newApprovalAction)
+            {
+                return;
+            }
+
+            var firstTelegram = priorDeliveries.FirstOrDefault(d =>
+                d.Channel.Equals("telegram", StringComparison.OrdinalIgnoreCase) && d.MessageId != null);
+            replyToMessageId = firstTelegram?.MessageId;
+        }
+
         var configured = await db.AlertRoutes
             .Where(r => r.Severity == incident.Severity)
             .Select(r => r.Channels)
@@ -39,32 +72,33 @@ public sealed class AlertRouter(
             ? await db.Servers.FirstOrDefaultAsync(s => s.Id == serverId, ct)
             : null;
 
-        var approvals = await db.Actions
-            .Where(a => a.IncidentId == incident.Id && a.Status == ActionStatus.PendingApproval)
-            .OrderBy(a => a.CreatedAt)
-            .Select(a => a.Label ?? a.Kind)
-            .ToListAsync(ct);
-
         var message = new AlertMessage(
             incident.Id,
             incident.Number,
             incident.Severity,
             incident.Title,
             BuildBody(incident, server),
-            approvals);
+            approvals,
+            replyToMessageId);
 
         foreach (var raw in selected.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (raw.Equals("dashboard", StringComparison.OrdinalIgnoreCase))
             {
-                db.AlertDeliveries.Add(Delivery(incident, "dashboard", "dashboard", "sent"));
+                var d = Delivery(incident, "dashboard", "dashboard", "sent");
+                d.Severity = incident.Severity;
+                d.ActionIds = pendingActionIds;
+                db.AlertDeliveries.Add(d);
                 continue;
             }
 
             if (!Enum.TryParse<AlertChannelKind>(raw, true, out var kind))
             {
                 log.LogWarning("Unknown alert channel {Channel} for INC-{Number}", raw, incident.Number);
-                db.AlertDeliveries.Add(Delivery(incident, raw, "(unknown channel)", "skipped"));
+                var d = Delivery(incident, raw, "(unknown channel)", "skipped");
+                d.Severity = incident.Severity;
+                d.ActionIds = pendingActionIds;
+                db.AlertDeliveries.Add(d);
                 continue;
             }
 
@@ -74,7 +108,10 @@ public sealed class AlertRouter(
                 // SPEC §12 defaults include email/WhatsApp/voice for critical and down, but Phase 1
                 // only ships Telegram. Keep the row so the UI can show what is not configured yet.
                 log.LogWarning("Alert channel {Channel} is not implemented yet (INC-{Number})", raw, incident.Number);
-                db.AlertDeliveries.Add(Delivery(incident, raw, "(not implemented)", "skipped"));
+                var d = Delivery(incident, raw, "(not implemented)", "skipped");
+                d.Severity = incident.Severity;
+                d.ActionIds = pendingActionIds;
+                db.AlertDeliveries.Add(d);
                 continue;
             }
 
@@ -82,19 +119,25 @@ public sealed class AlertRouter(
             if (recipients.Count == 0)
             {
                 log.LogWarning("No {Channel} recipient configured for INC-{Number}", raw, incident.Number);
-                db.AlertDeliveries.Add(Delivery(incident, raw, "(no recipient)", "skipped"));
+                var d = Delivery(incident, raw, "(no recipient)", "skipped");
+                d.Severity = incident.Severity;
+                d.ActionIds = pendingActionIds;
+                db.AlertDeliveries.Add(d);
                 continue;
             }
 
             foreach (var recipient in recipients)
             {
                 var delivery = Delivery(incident, raw, recipient.Email, "pending");
+                delivery.Severity = incident.Severity;
+                delivery.ActionIds = pendingActionIds;
                 db.AlertDeliveries.Add(delivery);
                 try
                 {
-                    await channel.SendAsync(recipient, message, ct);
+                    var sentMid = await channel.SendAsync(recipient, message, ct);
                     delivery.Status = "sent";
                     delivery.SentAt = DateTimeOffset.UtcNow;
+                    delivery.MessageId = sentMid;
                 }
                 catch (Exception ex)
                 {

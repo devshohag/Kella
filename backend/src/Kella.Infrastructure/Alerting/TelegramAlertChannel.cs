@@ -24,7 +24,7 @@ public sealed class TelegramAlertChannel : IAlertChannel, IDisposable
 
     public AlertChannelKind Kind => AlertChannelKind.Telegram;
 
-    public async Task SendAsync(User recipient, AlertMessage message, CancellationToken ct)
+    public async Task<long?> SendAsync(User recipient, AlertMessage message, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_options.BotToken))
             throw new InvalidOperationException("Telegram bot token is not configured (Kella:Telegram:BotToken).");
@@ -38,6 +38,10 @@ public sealed class TelegramAlertChannel : IAlertChannel, IDisposable
             ["text"] = Format(message),
             ["disable_web_page_preview"] = true,
         };
+        if (message.ReplyToMessageId.HasValue)
+        {
+            body["reply_to_message_id"] = message.ReplyToMessageId.Value;
+        }
 
         using var response = await _http.PostAsJsonAsync(url, body, ct);
         if (!response.IsSuccessStatusCode)
@@ -50,6 +54,14 @@ public sealed class TelegramAlertChannel : IAlertChannel, IDisposable
         using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
         if (!json.RootElement.TryGetProperty("ok", out var ok) || !ok.GetBoolean())
             throw new HttpRequestException("Telegram rejected the message.");
+
+        if (json.RootElement.TryGetProperty("result", out var result) &&
+            result.TryGetProperty("message_id", out var mid))
+        {
+            return mid.GetInt64();
+        }
+
+        return null;
     }
 
     public async Task SendMessageAsync(string chatId, string text, CancellationToken ct = default)
