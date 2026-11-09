@@ -103,7 +103,7 @@ public sealed class IpReputationService(
                     };
                     db.IpReputations.Add(rep);
 
-                    await OpenIncidentAsync(scope, db, target.OrganizationId, target.ServerId, target.PublicIp, returnCode, now, ct);
+                    rep.IncidentId = (await OpenIncidentAsync(scope, db, target.OrganizationId, target.ServerId, target.PublicIp, returnCode, now, ct)).Id;
                 }
                 else
                 {
@@ -115,7 +115,7 @@ public sealed class IpReputationService(
                         rep.ReturnCode = returnCode;
                         rep.ListedSince = now;
 
-                        await OpenIncidentAsync(scope, db, target.OrganizationId, target.ServerId, target.PublicIp, returnCode, now, ct);
+                        rep.IncidentId = (await OpenIncidentAsync(scope, db, target.OrganizationId, target.ServerId, target.PublicIp, returnCode, now, ct)).Id;
                     }
                     else
                     {
@@ -149,19 +149,20 @@ public sealed class IpReputationService(
                         rep.ReturnCode = null;
                         rep.ListedSince = null;
 
-                        var openInc = await db.Incidents.IgnoreQueryFilters()
-                            .Where(i => i.OrganizationId == target.OrganizationId &&
-                                        i.ServerId == target.ServerId &&
-                                        (i.Type == "mail" || i.Type == "mail.ip_reputation" || i.Type.StartsWith("mail.")) &&
-                                        (i.Status == IncidentStatus.Open || i.Status == IncidentStatus.Contained))
-                            .OrderByDescending(i => i.OpenedAt)
-                            .FirstOrDefaultAsync(ct);
-
-                        if (openInc != null)
+                        if (rep.IncidentId is Guid dnsblIncidentId)
                         {
-                            openInc.Status = IncidentStatus.Resolved;
-                            openInc.ResolvedAt = now;
-                            openInc.Summary = $"{openInc.Summary} (Delisted from DNSBL at {now:u})";
+                            var linkedIncident = await db.Incidents.IgnoreQueryFilters()
+                                .FirstOrDefaultAsync(i => i.Id == dnsblIncidentId &&
+                                                          i.OrganizationId == target.OrganizationId, ct);
+
+                            if (linkedIncident is { Status: IncidentStatus.Open or IncidentStatus.Contained })
+                            {
+                                linkedIncident.Status = IncidentStatus.Resolved;
+                                linkedIncident.ResolvedAt = now;
+                                linkedIncident.Summary = $"{linkedIncident.Summary} (Delisted from DNSBL at {now:u})";
+                            }
+
+                            rep.IncidentId = null;
                         }
                     }
                 }
@@ -171,7 +172,7 @@ public sealed class IpReputationService(
         }
     }
 
-    private async Task OpenIncidentAsync(
+    private async Task<Incident> OpenIncidentAsync(
         IServiceScope scope,
         KellaDbContext db,
         Guid organizationId,
@@ -189,6 +190,7 @@ public sealed class IpReputationService(
             OrganizationId = organizationId,
             ServerId = serverId,
             Type = "mail",
+            Subtype = "mail.ip_reputation",
             Severity = Severity.Warning,
             Title = $"Sending IP {publicIp} listed on DNSBL",
             Summary = $"IP {publicIp} returned {returnCode} on public DNSBL. Outbound deliverability impacted.",
@@ -227,6 +229,8 @@ public sealed class IpReputationService(
         {
             log.LogError(ex, "Failed to route alert for DNSBL incident {IncidentId} for IP {Ip}", inc.Id, publicIp);
         }
+
+        return inc;
     }
 
     public async Task<(DnsblStatus Status, string? ReturnCode)> CheckDnsblAsync(

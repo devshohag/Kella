@@ -434,6 +434,9 @@ namespace Kella.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("IncidentId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Ip")
                         .IsRequired()
                         .HasColumnType("text");

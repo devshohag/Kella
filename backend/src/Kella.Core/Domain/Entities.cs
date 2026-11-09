@@ -247,6 +247,8 @@ public sealed class IpReputation : Entity, IOrgScoped
     public required string Ip { get; set; }
     public bool Listed { get; set; }
     public string? ReturnCode { get; set; }
+    /// <summary>The single DNSBL incident opened for the current listing; cleared on delisting.</summary>
+    public Guid? IncidentId { get; set; }
     public DateTimeOffset? ListedSince { get; set; }
     public DateTimeOffset LastChecked { get; set; } = DateTimeOffset.UtcNow;
 }

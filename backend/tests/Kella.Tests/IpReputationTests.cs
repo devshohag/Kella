@@ -134,6 +134,100 @@ public class IpReputationTests : IClassFixture<WebApplicationFactory<Program>>
         }
     }
 
+    [Fact]
+    public async Task Delisting_resolves_only_the_dnsbl_incident()
+    {
+        var mockDns = new MockDnsResolver();
+        mockDns.ResolveHandler = _ => Array.Empty<IPAddress>();
+
+        using var factory = _factory.WithWebHostBuilder(b =>
+        {
+            b.ConfigureServices(services =>
+            {
+                services.AddSingleton<IDnsResolver>(mockDns);
+            });
+        });
+
+        var publicIp = "198.51.100.77";
+        Guid takeoverId;
+        Guid dnsblIncidentId;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+            var org = new Organization { Name = "Delist Scope Org" };
+            db.Organizations.Add(org);
+            var server = new Server
+            {
+                OrganizationId = org.Id,
+                Name = "srv-delist-scope",
+                PublicIp = publicIp,
+                Status = ServerStatus.Online
+            };
+            db.Servers.Add(server);
+
+            var dnsblIncident = new Incident
+            {
+                OrganizationId = org.Id,
+                ServerId = server.Id,
+                Number = 5201,
+                Type = "mail",
+                Subtype = "mail.ip_reputation",
+                Severity = Severity.Warning,
+                Title = $"Sending IP {publicIp} listed on DNSBL",
+                OpenedAt = DateTimeOffset.UtcNow.AddHours(-1),
+                Status = IncidentStatus.Open
+            };
+            var takeover = new Incident
+            {
+                OrganizationId = org.Id,
+                ServerId = server.Id,
+                Number = 5202,
+                Type = "mail",
+                Subtype = "mail.account_takeover",
+                Severity = Severity.Critical,
+                Title = "Mail account takeover",
+                OpenedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+                Status = IncidentStatus.Open
+            };
+            db.Incidents.AddRange(dnsblIncident, takeover);
+            db.IpReputations.Add(new IpReputation
+            {
+                OrganizationId = org.Id,
+                ServerId = server.Id,
+                Ip = publicIp,
+                Listed = true,
+                ReturnCode = "127.0.0.2",
+                IncidentId = dnsblIncident.Id,
+                ListedSince = DateTimeOffset.UtcNow.AddHours(-1),
+                LastChecked = DateTimeOffset.UtcNow.AddMinutes(-15)
+            });
+            await db.SaveChangesAsync();
+            takeoverId = takeover.Id;
+            dnsblIncidentId = dnsblIncident.Id;
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<IpReputationService>();
+            await service.CheckReputationAsync();
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+            var takeover = await db.Incidents.AsNoTracking().IgnoreQueryFilters().FirstAsync(i => i.Id == takeoverId);
+            Assert.Equal(IncidentStatus.Open, takeover.Status);
+
+            var dnsbl = await db.Incidents.AsNoTracking().IgnoreQueryFilters().FirstAsync(i => i.Id == dnsblIncidentId);
+            Assert.Equal(IncidentStatus.Resolved, dnsbl.Status);
+
+            var rep = await db.IpReputations.AsNoTracking().IgnoreQueryFilters()
+                .FirstAsync(r => r.OrganizationId == dnsbl.OrganizationId && r.Ip == publicIp);
+            Assert.Null(rep.IncidentId);
+        }
+    }
+
     private sealed class ThrowingAlertRouter : IAlertRouter
     {
         public Task RouteAsync(Incident incident, CancellationToken ct)

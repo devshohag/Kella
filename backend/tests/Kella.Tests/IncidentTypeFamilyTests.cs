@@ -117,7 +117,7 @@ public class IncidentTypeFamilyTests : IClassFixture<WebApplicationFactory<Progr
     }
 
     [Fact]
-    public async Task IpReputationService_resolves_open_or_contained_incident_with_family_type_mail()
+    public async Task IpReputationService_resolves_the_linked_incident_on_delist()
     {
         var mockDns = new MockDnsResolver();
         mockDns.ResolveHandler = _ => []; // Not listed
@@ -156,6 +156,7 @@ public class IncidentTypeFamilyTests : IClassFixture<WebApplicationFactory<Progr
                 ServerId = server.Id,
                 Number = 5002,
                 Type = "mail",
+                Subtype = "mail.ip_reputation",
                 Severity = Severity.Warning,
                 Title = "Sending IP listed",
                 OpenedAt = DateTimeOffset.UtcNow.AddMinutes(-30),
@@ -170,6 +171,7 @@ public class IncidentTypeFamilyTests : IClassFixture<WebApplicationFactory<Progr
                 ServerId = server.Id,
                 Ip = "192.0.2.100",
                 Listed = true,
+                IncidentId = mailIncident.Id,
                 ReturnCode = "127.0.0.2",
                 ListedSince = DateTimeOffset.UtcNow.AddHours(-1),
                 LastChecked = DateTimeOffset.UtcNow.AddMinutes(-15)
