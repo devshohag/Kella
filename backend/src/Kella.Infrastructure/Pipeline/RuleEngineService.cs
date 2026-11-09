@@ -163,7 +163,7 @@ public sealed class RuleEngineService(
             }
             else if (s.Mode == ActionMode.Auto)
             {
-                if (s.Kind == ActionKinds.BlockIp && s.Params.TryGetValue("ttlSec", out var ttlStr) && int.TryParse(ttlStr, out var ttlSec))
+                if (s.Params.TryGetValue("ttlSec", out var ttlStr) && int.TryParse(ttlStr, out var ttlSec))
                 {
                     expiresAt = DateTimeOffset.UtcNow.AddSeconds(ttlSec);
                 }
@@ -242,7 +242,7 @@ public sealed class RuleEngineService(
         if (a.Status != ActionStatus.Queued && a.Status != ActionStatus.Sent && a.Status != ActionStatus.Succeeded)
             return false;
 
-        if (a.Kind == ActionKinds.BlockIp && a.Params.TryGetValue("ttlSec", out var ttlStr) && int.TryParse(ttlStr, out var ttlSec))
+        if (a.Params.TryGetValue("ttlSec", out var ttlStr) && int.TryParse(ttlStr, out var ttlSec))
         {
             return a.CreatedAt.AddSeconds(ttlSec) > now;
         }

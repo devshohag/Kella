@@ -40,6 +40,10 @@ export function IncidentDetail() {
     mutationFn: api.approveAction,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['incident', id] }),
   })
+  const release = useMutation({
+    mutationFn: api.releaseAction,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['incident', id] }),
+  })
 
   if (error) return <div className="page"><div className="error">Could not load the incident: {error.message}</div></div>
   if (!data) return <div className="page"><div className="cap">Loading…</div></div>
@@ -191,6 +195,7 @@ export function IncidentDetail() {
 
           <section className="panel">
             <h2 style={{ marginBottom: 12 }}>Automated Actions</h2>
+            {release.error && <div className="error">{release.error.message}</div>}
             {done.length === 0 && <div className="cap">No actions yet.</div>}
             <table>
               <tbody>
@@ -203,6 +208,13 @@ export function IncidentDetail() {
                       )}
                     </td>
                     <td><span className={`pill ${a.status === 'Succeeded' ? 'ok' : a.status === 'Failed' ? 'crit' : ''}`}>{a.status}</span></td>
+                    <td style={{ textAlign: 'right' }}>
+                      {a.kind === 'hold_sender' && ['Queued', 'Sent', 'Succeeded'].includes(a.status) && (
+                        <button className="btn" onClick={() => release.mutate(a.id)} disabled={release.isPending}>
+                          Release
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

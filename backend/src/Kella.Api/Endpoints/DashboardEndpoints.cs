@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Kella.Core.Actions;
 using Kella.Core.Domain;
 using Kella.Infrastructure.Data;
+using Kella.Infrastructure.Pipeline;
 using Kella.Infrastructure.Security;
 
 namespace Kella.Api.Endpoints;
@@ -145,6 +146,22 @@ public static class DashboardEndpoints
             });
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
+        });
+
+        g.MapPost("/actions/{id:guid}/release", async (Guid id, KellaDbContext db, HttpContext http, SenderReleaseService releases, CancellationToken ct) =>
+        {
+            var hold = await db.Actions.FirstOrDefaultAsync(a => a.Id == id, ct);
+            if (hold is null) return Results.NotFound();
+            if (hold.Kind != ActionKinds.HoldSender)
+                return Results.Problem("Only hold_sender actions can be released.", statusCode: 409);
+            if (hold.Status is not (ActionStatus.Queued or ActionStatus.Sent or ActionStatus.Succeeded))
+                return Results.Problem("This sender is not currently held.", statusCode: 409);
+
+            var actor = http.User.FindFirst("sub")?.Value ?? "system";
+            var queued = await releases.QueueForActionAsync(id, "user", actor, "dashboard", ct);
+            return queued == 0
+                ? Results.Problem("A release is already queued for this sender.", statusCode: 409)
+                : Results.NoContent();
         });
     }
 

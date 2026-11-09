@@ -4,6 +4,13 @@ using Kella.Core.Events;
 
 namespace Kella.Core.Rules;
 
+/// <summary>Shared defaults for Mail Guard actions (SPEC §8.5, §9).</summary>
+public static class MailDefaults
+{
+    /// <summary>A held sender is released automatically after four hours unless an operator releases sooner.</summary>
+    public const int HoldTtlSeconds = 4 * 60 * 60;
+}
+
 /// <summary>
 /// mail.outbound_spike: messages queued by one sender / 10 min vs baseline (SPEC §9).
 /// Default threshold: > 20x baseline and > 100 messages within 10 minutes.
@@ -13,12 +20,15 @@ public sealed class MailOutboundSpikeRule : IRule
 {
     private readonly SlidingWindowCounter _counter;
     private readonly int _minSpikeCount;
+    private readonly int _holdTtlSeconds;
     private readonly IBaselineProvider? _baselines;
 
-    public MailOutboundSpikeRule(TimeSpan? window = null, int minSpikeCount = 100, IBaselineProvider? baselines = null)
+    public MailOutboundSpikeRule(TimeSpan? window = null, int minSpikeCount = 100, IBaselineProvider? baselines = null,
+        int holdTtlSeconds = MailDefaults.HoldTtlSeconds)
     {
         _counter = new SlidingWindowCounter(window ?? TimeSpan.FromMinutes(10));
         _minSpikeCount = minSpikeCount;
+        _holdTtlSeconds = holdTtlSeconds;
         _baselines = baselines;
     }
 
@@ -90,9 +100,13 @@ public sealed class MailOutboundSpikeRule : IRule
             [
                 new SuggestedAction(
                     ActionKinds.HoldSender,
-                    new Dictionary<string, string> { ["sender"] = sender },
+                    new Dictionary<string, string>
+                    {
+                        ["sender"] = sender,
+                        ["ttlSec"] = _holdTtlSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    },
                     ActionMode.Auto,
-                    $"Hold messages from {sender}")
+                    $"Hold messages from {sender} (auto-release after {_holdTtlSeconds / 3600}h)")
             ]);
     }
 }
@@ -106,10 +120,13 @@ public sealed class MailAccountTakeoverRule : IRule
     private readonly SlidingWindowCounter _failedLogins = new(TimeSpan.FromHours(2));
     private readonly SlidingWindowCounter _outboundCounts = new(TimeSpan.FromMinutes(10));
     private readonly int _minOutboundSpike;
+    private readonly int _holdTtlSeconds;
 
-    public MailAccountTakeoverRule(int minOutboundSpike = 50)
+    public MailAccountTakeoverRule(int minOutboundSpike = 50,
+        int holdTtlSeconds = MailDefaults.HoldTtlSeconds)
     {
         _minOutboundSpike = minOutboundSpike;
+        _holdTtlSeconds = holdTtlSeconds;
     }
 
     public string Code => "mail.account_takeover";
@@ -181,9 +198,13 @@ public sealed class MailAccountTakeoverRule : IRule
                     [
                         new SuggestedAction(
                             ActionKinds.HoldSender,
-                            new Dictionary<string, string> { ["sender"] = sender },
+                            new Dictionary<string, string>
+                            {
+                                ["sender"] = sender,
+                                ["ttlSec"] = _holdTtlSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            },
                             ActionMode.Auto,
-                            $"Hold messages from {sender}")
+                            $"Hold messages from {sender} (auto-release after {_holdTtlSeconds / 3600}h)")
                     ]);
             }
         }

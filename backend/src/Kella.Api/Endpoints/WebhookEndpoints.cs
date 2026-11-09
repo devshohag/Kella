@@ -8,6 +8,7 @@ using Kella.Core.Domain;
 using Kella.Infrastructure;
 using Kella.Infrastructure.Alerting;
 using Kella.Infrastructure.Data;
+using Kella.Infrastructure.Pipeline;
 using Kella.Infrastructure.Security;
 
 namespace Kella.Api.Endpoints;
@@ -25,6 +26,7 @@ public static class WebhookEndpoints
             KellaDbContext db,
             OrgContext org,
             CommandSigner signer,
+            SenderReleaseService releases,
             TelegramAlertChannel telegram,
             IConfiguration config,
             IHostEnvironment env,
@@ -267,6 +269,29 @@ public static class WebhookEndpoints
 
                 var statusSummary = $"INC-{targetIncident.Number}: {targetIncident.Title}\nStatus: {targetIncident.Status}\nSeverity: {targetIncident.Severity}\n{targetIncident.Summary}";
                 await telegram.SendMessageAsync(chatId, statusSummary, ct);
+            }
+            else if (text.Equals("release", StringComparison.OrdinalIgnoreCase))
+            {
+                if (targetIncident == null)
+                {
+                    await telegram.SendMessageAsync(chatId, "Reply to an alert message to release a held sender.", ct);
+                    return Results.Ok();
+                }
+
+                var released = await releases.QueueForIncidentAsync(
+                    targetIncident.Id, "user", user.Id.ToString(), "telegram", ct);
+
+                if (updateId.HasValue)
+                {
+                    db.TelegramUpdates.Add(new TelegramUpdate { UpdateId = updateId.Value, ProcessedAt = DateTimeOffset.UtcNow });
+                    await db.SaveChangesAsync(ct);
+                }
+
+                await telegram.SendMessageAsync(chatId,
+                    released > 0
+                        ? $"Queued release for {released} held sender(s) on INC-{targetIncident.Number}."
+                        : $"No held sender to release on INC-{targetIncident.Number}.",
+                    ct);
             }
 
             return Results.Ok();

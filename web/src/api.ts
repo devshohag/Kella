@@ -122,6 +122,7 @@ export const api = {
   },
   incident: (id: string) => request<IncidentDetail>(`/api/incidents/${id}`),
   approveAction: (id: string) => request<void>(`/api/actions/${id}/approve`, { method: 'POST' }),
+  releaseAction: (id: string) => request<void>(`/api/actions/${id}/release`, { method: 'POST' }),
 }
 
 export const severityClass: Record<Severity, string> = { Info: '', Warning: 'warn', Critical: 'crit', Down: 'crit' }

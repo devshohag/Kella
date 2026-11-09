@@ -38,10 +38,14 @@ public static class DependencyInjection
         services.AddSingleton<IAlertChannel>(sp => sp.GetRequiredService<Alerting.TelegramAlertChannel>());
 
         // Built-in rules (SPEC §9). Add new rules here.
+        var holdTtlSeconds = config.GetValue("Kella:Mail:HoldTtlSeconds", MailDefaults.HoldTtlSeconds);
         services.AddSingleton<IRule, SshBruteForceRule>();
         services.AddSingleton<IRule, MailBruteForceIpRule>();
-        services.AddSingleton<IRule>(sp => new MailOutboundSpikeRule(baselines: sp.GetRequiredService<IBaselineProvider>()));
-        services.AddSingleton<IRule, MailAccountTakeoverRule>();
+        services.AddSingleton<IRule>(sp => new MailOutboundSpikeRule(
+            baselines: sp.GetRequiredService<IBaselineProvider>(), holdTtlSeconds: holdTtlSeconds));
+        services.AddSingleton<IRule>(sp => new MailAccountTakeoverRule(holdTtlSeconds: holdTtlSeconds));
+
+        services.AddScoped<SenderReleaseService>();
         return services;
     }
 
@@ -56,6 +60,8 @@ public static class DependencyInjection
         services.AddHostedService(sp => sp.GetRequiredService<BaselineWriterService>());
         services.AddSingleton<ServerHealthMonitor>();
         services.AddHostedService(sp => sp.GetRequiredService<ServerHealthMonitor>());
+        services.AddSingleton<HoldExpiryService>();
+        services.AddHostedService(sp => sp.GetRequiredService<HoldExpiryService>());
         return services;
     }
 }

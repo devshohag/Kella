@@ -69,3 +69,27 @@ curl -F "url=https://kella.example.com/api/hooks/telegram" \
      -F "secret_token=YOUR_WEBHOOK_SECRET_TOKEN" \
      https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook
 ```
+
+## Emergency: release a held sender
+
+`hold_sender` normally releases itself after `Kella:Mail:HoldTtlSeconds` (four hours by default). If you must release a sender immediately:
+
+1. In the dashboard open the incident and press **Release** next to the hold action.
+2. From Telegram, reply `release` to the incident alert (Responder role or higher).
+3. If Kella is unreachable, do it on the mail server as root:
+
+```bash
+# 1. Remove the sender's HOLD line from the Postfix access map.
+sudo cp /etc/postfix/sender_access /root/sender_access.backup
+sudo sed -i '/^sender@example\.com[[:space:]]\+HOLD$/d' /etc/postfix/sender_access
+
+# 2. Rebuild the indexed map and reload Postfix.
+sudo postmap /etc/postfix/sender_access
+sudo postfix reload
+
+# 3. Release that sender's held queue items.
+sudo postqueue -p | awk '/^[A-F0-9]/ { id=$1 } /sender@example\.com/ { print id }' | \
+  xargs -r sudo postsuper -H
+```
+
+Confirm with `postqueue -p` (the held items should disappear from the `!` queue) and `postmap -q sender@example.com /etc/postfix/sender_access` (it should print nothing).
