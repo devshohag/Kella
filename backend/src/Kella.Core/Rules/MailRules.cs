@@ -30,13 +30,17 @@ public sealed class MailOutboundSpikeRule : IRule
         if (!evt.Attrs.TryGetValue("sender", out var sender) || string.IsNullOrWhiteSpace(sender))
             return null;
 
-        var key = $"{evt.ServerId}:{sender.ToLowerInvariant()}";
+        var senderLower = sender.Trim().ToLowerInvariant();
+        var key = $"{evt.ServerId}:{senderLower}";
         var count = _counter.Add(key, evt.Ts);
 
         // Check against baselines if 24h data exist (SPEC §9)
-        // hour of week: (dayOfWeek * 24 + hour) UTC
-        int hourOfWeek = ((int)evt.Ts.DayOfWeek * 24) + evt.Ts.Hour;
-        var p95 = _baselines?.GetP95(evt.OrganizationId, "mailbox", evt.ServerId, hourOfWeek);
+        // hour of week in UTC: 0 = Monday 00:00 ... 167 = Sunday 23:00
+        var utc = evt.Ts.UtcDateTime;
+        int dayIndex = ((int)utc.DayOfWeek + 6) % 7; // Monday=0 ... Sunday=6
+        int hourOfWeek = (dayIndex * 24) + utc.Hour;
+
+        var p95 = _baselines?.GetP95(evt.OrganizationId, "mailbox", key, hourOfWeek);
 
         bool isSpike;
         if (p95.HasValue && p95.Value > 0)

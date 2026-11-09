@@ -29,7 +29,8 @@ public static class DependencyInjection
 
         services.AddSingleton<IEventBus, InProcessEventBus>();
         services.AddSingleton<CommandSigner>();
-        services.AddSingleton<IBaselineProvider, DbBaselineProvider>();
+        services.AddSingleton<DbBaselineProvider>();
+        services.AddSingleton<IBaselineProvider>(sp => sp.GetRequiredService<DbBaselineProvider>());
         services.AddScoped<IAlertRouter, Alerting.AlertRouter>();
         services.AddSingleton(sp => Alerting.AlertSettings.Telegram(sp.GetRequiredService<IConfiguration>()));
         services.AddSingleton<Alerting.TelegramAlertChannel>();
@@ -48,6 +49,8 @@ public static class DependencyInjection
     {
         services.AddHostedService<RuleEngineService>();
         services.AddHostedService<IpReputationService>();
+        services.AddSingleton<BaselineWriterService>();
+        services.AddHostedService(sp => sp.GetRequiredService<BaselineWriterService>());
         return services;
     }
 }

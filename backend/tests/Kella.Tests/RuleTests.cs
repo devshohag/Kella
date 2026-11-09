@@ -111,10 +111,12 @@ public class RuleTests
         var baselines = new InMemoryBaselineProvider();
         var orgId = Guid.NewGuid();
         var t0 = DateTimeOffset.Parse("2026-11-08T02:00:00Z");
-        int hourOfWeek = ((int)t0.DayOfWeek * 24) + t0.Hour;
+        var utc = t0.UtcDateTime;
+        int dayIndex = ((int)utc.DayOfWeek + 6) % 7;
+        int hourOfWeek = (dayIndex * 24) + utc.Hour;
 
         // Baseline p95 is 10 messages/hour. 20x baseline = 200 messages needed!
-        baselines.SetBaseline(orgId, "mailbox", Server, hourOfWeek, 10.0);
+        baselines.SetBaseline(orgId, "mailbox", $"{Server}:highvolume@provider.com", hourOfWeek, 10.0);
 
         var rule = new MailOutboundSpikeRule(minSpikeCount: 100, baselines: baselines);
 

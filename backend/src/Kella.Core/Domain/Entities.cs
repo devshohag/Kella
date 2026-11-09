@@ -210,11 +210,12 @@ public sealed class Baseline : Entity, IOrgScoped
 {
     public Guid OrganizationId { get; set; }
     public required string EntityKind { get; set; }
-    public Guid EntityId { get; set; }
+    public required string EntityId { get; set; }
     /// <summary>0 = Monday 00:00 … 167 = Sunday 23:00, in UTC.</summary>
     public int HourOfWeek { get; set; }
     public double P50 { get; set; }
     public double P95 { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 public sealed class AuditEntry : IOrgScoped
