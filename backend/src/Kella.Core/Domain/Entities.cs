@@ -206,6 +206,8 @@ public sealed class AlertDelivery : Entity, IOrgScoped
     public DateTimeOffset? SentAt { get; set; }
     public string? Reply { get; set; }
     public long? MessageId { get; set; }
+    /// <summary>Telegram chat the message id belongs to; message ids are only unique per chat.</summary>
+    public string? ChatId { get; set; }
     public Severity? Severity { get; set; }
     public List<Guid> ActionIds { get; set; } = [];
 }

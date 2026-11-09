@@ -43,7 +43,6 @@ public sealed class AlertRouter(
             .OrderBy(d => d.CreatedAt)
             .ToListAsync(ct);
 
-        long? replyToMessageId = null;
         if (priorDeliveries.Count > 0)
         {
             var maxPriorSeverity = priorDeliveries.Max(d => d.Severity ?? Severity.Info);
@@ -56,10 +55,6 @@ public sealed class AlertRouter(
             {
                 return;
             }
-
-            var firstTelegram = priorDeliveries.FirstOrDefault(d =>
-                d.Channel.Equals("telegram", StringComparison.OrdinalIgnoreCase) && d.MessageId != null);
-            replyToMessageId = firstTelegram?.MessageId;
         }
 
         var configured = await db.AlertRoutes
@@ -78,8 +73,7 @@ public sealed class AlertRouter(
             incident.Severity,
             incident.Title,
             BuildBody(incident, server),
-            approvals,
-            replyToMessageId);
+            approvals);
 
         foreach (var raw in selected.Distinct(StringComparer.OrdinalIgnoreCase))
         {
@@ -131,10 +125,26 @@ public sealed class AlertRouter(
                 var delivery = Delivery(incident, raw, recipient.Email, "pending");
                 delivery.Severity = incident.Severity;
                 delivery.ActionIds = pendingActionIds;
+                delivery.ChatId = kind == AlertChannelKind.Telegram ? recipient.TelegramChatId : null;
                 db.AlertDeliveries.Add(delivery);
                 try
                 {
-                    var sentMid = await channel.SendAsync(recipient, message, ct);
+                    long? replyTo = null;
+                    if (kind == AlertChannelKind.Telegram && !string.IsNullOrWhiteSpace(recipient.TelegramChatId))
+                    {
+                        replyTo = priorDeliveries
+                            .Where(d => d.Channel.Equals("telegram", StringComparison.OrdinalIgnoreCase) &&
+                                        d.MessageId != null &&
+                                        (string.Equals(d.ChatId, recipient.TelegramChatId, StringComparison.Ordinal) ||
+                                         (d.ChatId == null && string.Equals(d.Recipient, recipient.Email, StringComparison.OrdinalIgnoreCase))))
+                            .OrderByDescending(d => d.CreatedAt)
+                            .ThenByDescending(d => d.MessageId)
+                            .Select(d => d.MessageId)
+                            .FirstOrDefault();
+                    }
+
+                    var outbound = replyTo.HasValue ? message with { ReplyToMessageId = replyTo } : message;
+                    var sentMid = await channel.SendAsync(recipient, outbound, ct);
                     delivery.Status = "sent";
                     delivery.SentAt = DateTimeOffset.UtcNow;
                     delivery.MessageId = sentMid;

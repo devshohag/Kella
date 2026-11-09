@@ -677,6 +677,7 @@ public class WebhookSecurityTests(WebApplicationFactory<Program> factory) : ICla
                 Recipient = "stable_options@test.org",
                 Status = "sent",
                 MessageId = alertMessageId,
+                ChatId = "999999",
                 Severity = Severity.Critical,
                 ActionIds = [act1.Id, act2.Id]
             };
@@ -768,6 +769,264 @@ public class WebhookSecurityTests(WebApplicationFactory<Program> factory) : ICla
         var res99 = await client.SendAsync(req99);
         Assert.Equal(HttpStatusCode.OK, res99.StatusCode);
         Assert.Contains(sentMessages, msg => msg.Contains("No pending action 99"));
+    }
+
+    [Fact]
+    public async Task Telegram_webhook_same_message_id_in_two_chats_approves_only_the_matching_alert()
+    {
+        var client = _factory.CreateClient();
+        Guid actAId;
+        Guid actBId;
+        const long sameMessageId = 424242;
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+            var org = new Organization { Name = "Org Two Chat Test" };
+            db.Organizations.Add(org);
+
+            db.Users.Add(new User
+            {
+                OrganizationId = org.Id,
+                Email = "responder-a@test.org",
+                Name = "Responder A",
+                Role = UserRole.Responder,
+                TelegramChatId = "111111"
+            });
+            db.Users.Add(new User
+            {
+                OrganizationId = org.Id,
+                Email = "responder-b@test.org",
+                Name = "Responder B",
+                Role = UserRole.Responder,
+                TelegramChatId = "222222"
+            });
+
+            var server = new Server { OrganizationId = org.Id, Name = "srv-two-chat" };
+            db.Servers.Add(server);
+
+            var incA = new Incident
+            {
+                OrganizationId = org.Id,
+                ServerId = server.Id,
+                Number = 7101,
+                Type = "mail.outbound_spike",
+                Title = "Spike A",
+                Status = IncidentStatus.Open
+            };
+            var incB = new Incident
+            {
+                OrganizationId = org.Id,
+                ServerId = server.Id,
+                Number = 7102,
+                Type = "mail.outbound_spike",
+                Title = "Spike B",
+                Status = IncidentStatus.Open
+            };
+            db.Incidents.AddRange(incA, incB);
+
+            var actA = new KellaAction
+            {
+                OrganizationId = org.Id,
+                IncidentId = incA.Id,
+                ServerId = server.Id,
+                Kind = "hold_sender",
+                Params = new() { ["sender"] = "a@bad.com" },
+                Status = ActionStatus.PendingApproval,
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(24)
+            };
+            var actB = new KellaAction
+            {
+                OrganizationId = org.Id,
+                IncidentId = incB.Id,
+                ServerId = server.Id,
+                Kind = "hold_sender",
+                Params = new() { ["sender"] = "b@bad.com" },
+                Status = ActionStatus.PendingApproval,
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(24)
+            };
+            db.Actions.AddRange(actA, actB);
+
+            // Telegram message ids are only unique per chat: both deliveries use the same id.
+            db.AlertDeliveries.Add(new AlertDelivery
+            {
+                OrganizationId = org.Id,
+                IncidentId = incA.Id,
+                Channel = "telegram",
+                Recipient = "responder-a@test.org",
+                Status = "sent",
+                MessageId = sameMessageId,
+                ChatId = "111111",
+                Severity = Severity.Critical,
+                ActionIds = [actA.Id]
+            });
+            db.AlertDeliveries.Add(new AlertDelivery
+            {
+                OrganizationId = org.Id,
+                IncidentId = incB.Id,
+                Channel = "telegram",
+                Recipient = "responder-b@test.org",
+                Status = "sent",
+                MessageId = sameMessageId,
+                ChatId = "222222",
+                Severity = Severity.Critical,
+                ActionIds = [actB.Id]
+            });
+
+            await db.SaveChangesAsync();
+            actAId = actA.Id;
+            actBId = actB.Id;
+        }
+
+        var alertB = new AlertMessage(
+            Guid.Empty, 7102, Severity.Critical, "Spike B", "Body B", ["hold b@bad.com"]);
+        var alertTextB = Kella.Infrastructure.Alerting.TelegramAlertChannel.Format(alertB);
+
+        var payload = new
+        {
+            update_id = 771001L,
+            message = new
+            {
+                chat = new { id = "222222" },
+                text = "1",
+                reply_to_message = new
+                {
+                    message_id = sameMessageId,
+                    text = alertTextB
+                }
+            }
+        };
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/hooks/telegram") { Content = JsonContent.Create(payload) };
+        req.Headers.Add("X-Telegram-Bot-Api-Secret-Token", SecretToken);
+        var res = await client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+            var actA = await db.Actions.IgnoreQueryFilters().FirstAsync(a => a.Id == actAId);
+            var actB = await db.Actions.IgnoreQueryFilters().FirstAsync(a => a.Id == actBId);
+            Assert.Equal(ActionStatus.PendingApproval, actA.Status);
+            Assert.Equal(ActionStatus.Queued, actB.Status);
+        }
+    }
+
+    [Fact]
+    public async Task Telegram_webhook_rejects_reply_when_text_incident_does_not_match_delivery()
+    {
+        var client = _factory.CreateClient();
+        Guid actAId;
+        Guid actBId;
+        const long alertMessageId = 515151;
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+            var org = new Organization { Name = "Org Mismatch Test" };
+            db.Organizations.Add(org);
+
+            db.Users.Add(new User
+            {
+                OrganizationId = org.Id,
+                Email = "mismatch@test.org",
+                Name = "Mismatch Responder",
+                Role = UserRole.Responder,
+                TelegramChatId = "333333"
+            });
+
+            var server = new Server { OrganizationId = org.Id, Name = "srv-mismatch" };
+            db.Servers.Add(server);
+
+            var incA = new Incident
+            {
+                OrganizationId = org.Id,
+                ServerId = server.Id,
+                Number = 8001,
+                Type = "mail.outbound_spike",
+                Title = "Spike A",
+                Status = IncidentStatus.Open
+            };
+            var incB = new Incident
+            {
+                OrganizationId = org.Id,
+                ServerId = server.Id,
+                Number = 8002,
+                Type = "mail.outbound_spike",
+                Title = "Spike B",
+                Status = IncidentStatus.Open
+            };
+            db.Incidents.AddRange(incA, incB);
+
+            var actA = new KellaAction
+            {
+                OrganizationId = org.Id,
+                IncidentId = incA.Id,
+                ServerId = server.Id,
+                Kind = "hold_sender",
+                Params = new() { ["sender"] = "a@bad.com" },
+                Status = ActionStatus.PendingApproval,
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(24)
+            };
+            var actB = new KellaAction
+            {
+                OrganizationId = org.Id,
+                IncidentId = incB.Id,
+                ServerId = server.Id,
+                Kind = "hold_sender",
+                Params = new() { ["sender"] = "b@bad.com" },
+                Status = ActionStatus.PendingApproval,
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(24)
+            };
+            db.Actions.AddRange(actA, actB);
+
+            db.AlertDeliveries.Add(new AlertDelivery
+            {
+                OrganizationId = org.Id,
+                IncidentId = incA.Id,
+                Channel = "telegram",
+                Recipient = "mismatch@test.org",
+                Status = "sent",
+                MessageId = alertMessageId,
+                ChatId = "333333",
+                Severity = Severity.Critical,
+                ActionIds = [actA.Id]
+            });
+
+            await db.SaveChangesAsync();
+            actAId = actA.Id;
+            actBId = actB.Id;
+        }
+
+        var alertB = new AlertMessage(Guid.Empty, 8002, Severity.Critical, "Spike B", "Body B", ["hold b@bad.com"]);
+        var alertTextB = Kella.Infrastructure.Alerting.TelegramAlertChannel.Format(alertB);
+
+        var payload = new
+        {
+            update_id = 772001L,
+            message = new
+            {
+                chat = new { id = "333333" },
+                text = "1",
+                reply_to_message = new
+                {
+                    message_id = alertMessageId,
+                    text = alertTextB
+                }
+            }
+        };
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/hooks/telegram") { Content = JsonContent.Create(payload) };
+        req.Headers.Add("X-Telegram-Bot-Api-Secret-Token", SecretToken);
+        var res = await client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+            var actA = await db.Actions.IgnoreQueryFilters().FirstAsync(a => a.Id == actAId);
+            var actB = await db.Actions.IgnoreQueryFilters().FirstAsync(a => a.Id == actBId);
+            Assert.Equal(ActionStatus.PendingApproval, actA.Status);
+            Assert.Equal(ActionStatus.PendingApproval, actB.Status);
+        }
     }
 }
 

@@ -94,15 +94,29 @@ public static class WebhookEndpoints
 
             org.Set(user.OrganizationId);
 
+            async Task RecordUpdateIdAsync()
+            {
+                if (!updateId.HasValue) return;
+                db.TelegramUpdates.Add(new TelegramUpdate
+                {
+                    UpdateId = updateId.Value,
+                    ProcessedAt = DateTimeOffset.UtcNow,
+                });
+                await db.SaveChangesAsync(ct);
+            }
+
             // Determine if the message is replying to an alert message
             Incident? targetIncident = null;
             AlertDelivery? targetDelivery = null;
+            var replyHadMessageId = false;
             if (msg.TryGetProperty("reply_to_message", out var replyMsg))
             {
                 if (replyMsg.TryGetProperty("message_id", out var midElem) && midElem.TryGetInt64(out var rmid))
                 {
+                    replyHadMessageId = true;
+                    // Telegram message ids are only unique per chat, so scope by both.
                     targetDelivery = await db.AlertDeliveries
-                        .FirstOrDefaultAsync(d => d.MessageId == rmid, ct);
+                        .FirstOrDefaultAsync(d => d.MessageId == rmid && d.ChatId == chatId, ct);
                 }
 
                 if (replyMsg.TryGetProperty("text", out var replyText))
@@ -117,10 +131,36 @@ public static class WebhookEndpoints
                 }
             }
 
-            if (targetDelivery == null && targetIncident != null)
+            // A reply carrying a message id must reference an alert delivered to this chat.
+            if (replyHadMessageId && targetDelivery == null)
+            {
+                await RecordUpdateIdAsync();
+                await telegram.SendMessageAsync(chatId, "That reply does not match an alert in this chat.", ct);
+                return Results.Ok();
+            }
+
+            if (targetDelivery != null)
+            {
+                // The alert text must name the same incident as the delivery it replies to.
+                if (targetIncident != null && targetDelivery.IncidentId != targetIncident.Id)
+                {
+                    await RecordUpdateIdAsync();
+                    await telegram.SendMessageAsync(chatId, "That reply does not match this alert.", ct);
+                    return Results.Ok();
+                }
+
+                if (targetIncident == null)
+                {
+                    targetIncident = await db.Incidents
+                        .FirstOrDefaultAsync(i => i.Id == targetDelivery.IncidentId, ct);
+                }
+            }
+            else if (targetIncident != null)
             {
                 targetDelivery = await db.AlertDeliveries
-                    .Where(d => d.IncidentId == targetIncident.Id && d.Channel.ToLower() == "telegram")
+                    .Where(d => d.IncidentId == targetIncident.Id &&
+                                d.Channel.ToLower() == "telegram" &&
+                                (d.ChatId == chatId || (d.ChatId == null && d.Recipient == user.Email)))
                     .OrderByDescending(d => d.CreatedAt)
                     .FirstOrDefaultAsync(ct);
             }

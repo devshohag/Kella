@@ -102,6 +102,15 @@ public class ThreadedAlertsTests : IClassFixture<WebApplicationFactory<Program>>
             Role = UserRole.Admin,
         };
         db.Users.Add(user);
+        var secondUser = new User
+        {
+            OrganizationId = orgId,
+            Email = "second@threaded.org",
+            Name = "Second Admin",
+            TelegramChatId = "87654321",
+            Role = UserRole.Admin,
+        };
+        db.Users.Add(secondUser);
 
         var server = new Server { OrganizationId = orgId, Name = "srv-threaded" };
         db.Servers.Add(server);
@@ -123,16 +132,19 @@ public class ThreadedAlertsTests : IClassFixture<WebApplicationFactory<Program>>
         // 1. Initial route: sends alert without reply_to_message_id
         await router.RouteAsync(incident, default);
 
-        Assert.Single(mockHandler.SentRequests);
+        Assert.Equal(2, mockHandler.SentRequests.Count);
         var initialReq = mockHandler.SentRequests[0];
         Assert.False(initialReq.RootElement.TryGetProperty("reply_to_message_id", out _));
+        Assert.False(mockHandler.SentRequests[1].RootElement.TryGetProperty("reply_to_message_id", out _));
 
         var deliveries = await db.AlertDeliveries.IgnoreQueryFilters()
             .Where(d => d.IncidentId == incident.Id && d.Channel == "telegram")
+            .OrderBy(d => d.CreatedAt)
             .ToListAsync();
-        Assert.Single(deliveries);
-        // Stored message_id should be 1001
-        Assert.Equal(1001, deliveries[0].MessageId);
+        Assert.Equal(2, deliveries.Count);
+        // Stored message ids follow the send order (admin, second admin).
+        Assert.Equal(new long?[] { 1001, 1002 }, deliveries.Select(d => d.MessageId).ToArray());
+        Assert.Equal(new string?[] { "12345678", "87654321" }, deliveries.Select(d => d.ChatId).ToArray());
 
         // 2. Join with severity increase: Warning -> Critical
         incident.Severity = Severity.Critical;
@@ -141,16 +153,20 @@ public class ThreadedAlertsTests : IClassFixture<WebApplicationFactory<Program>>
 
         await router.RouteAsync(incident, default);
 
-        // Must have sent a second message to Telegram
-        Assert.Equal(2, mockHandler.SentRequests.Count);
-        var secondReq = mockHandler.SentRequests[1];
-        Assert.True(secondReq.RootElement.TryGetProperty("reply_to_message_id", out var replyToProp));
-        Assert.Equal(1001, replyToProp.GetInt64());
+        // Must have sent a second message to each recipient
+        Assert.Equal(4, mockHandler.SentRequests.Count);
+        var adminReply = mockHandler.SentRequests[2];
+        Assert.True(adminReply.RootElement.TryGetProperty("reply_to_message_id", out var adminReplyTo));
+        Assert.Equal(1001, adminReplyTo.GetInt64());
+
+        var secondReply = mockHandler.SentRequests[3];
+        Assert.True(secondReply.RootElement.TryGetProperty("reply_to_message_id", out var secondReplyTo));
+        Assert.Equal(1002, secondReplyTo.GetInt64());
 
         // 3. Join without severity increase or new approval action: sends NOTHING
         await router.RouteAsync(incident, default);
 
-        // Still only 2 requests sent
-        Assert.Equal(2, mockHandler.SentRequests.Count);
+        // Still only 4 requests sent
+        Assert.Equal(4, mockHandler.SentRequests.Count);
     }
 }

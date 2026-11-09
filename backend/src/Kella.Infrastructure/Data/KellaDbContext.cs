@@ -77,6 +77,7 @@ public sealed class KellaDbContext(DbContextOptions<KellaDbContext> options, IOr
         b.Entity<AlertRoute>().PrimitiveCollection(x => x.Channels).HasColumnType("text[]");
 
         b.Entity<AlertDelivery>().ToTable("alert_deliveries").HasIndex(x => new { x.OrganizationId, x.IncidentId });
+        b.Entity<AlertDelivery>().ToTable("alert_deliveries").HasIndex(x => new { x.OrganizationId, x.ChatId, x.MessageId });
         b.Entity<AlertDelivery>().PrimitiveCollection(x => x.ActionIds).HasColumnType("uuid[]");
 
         b.Entity<Baseline>().ToTable("baselines").HasIndex(x => new { x.OrganizationId, x.EntityKind, x.EntityId, x.HourOfWeek }).IsUnique();

@@ -80,6 +80,9 @@ namespace Kella.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ChatId")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -115,6 +118,8 @@ namespace Kella.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OrganizationId", "IncidentId");
+
+                    b.HasIndex("OrganizationId", "ChatId", "MessageId");
 
                     b.ToTable("alert_deliveries", (string)null);
                 });
