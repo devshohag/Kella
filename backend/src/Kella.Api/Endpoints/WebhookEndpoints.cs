@@ -33,7 +33,7 @@ public static class WebhookEndpoints
         {
             // Verify X-Telegram-Bot-Api-Secret-Token with constant-time compare
             var expectedSecret = config["Kella:Telegram:WebhookSecretToken"];
-            var isDev = env.IsDevelopment() || env.IsEnvironment("Testing");
+            var isDev = env.IsDevelopment();
 
             if (string.IsNullOrEmpty(expectedSecret))
             {

@@ -19,20 +19,13 @@ public sealed class CommandSigner
 
     public CommandSigner(IConfiguration config, IHostEnvironment? env = null)
     {
-        var isDev = env?.IsDevelopment() == true || env?.IsEnvironment("Testing") == true;
+        var isDev = env?.IsDevelopment() == true;
         var raw = config["Kella:Commands:PrivateKey"];
 
         if (string.IsNullOrWhiteSpace(raw))
         {
-            if (isDev)
-            {
-                raw = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-            }
-            else
-            {
-                throw new InvalidOperationException(
-                    "Kella:Commands:PrivateKey is required in production (base64 Ed25519 seed). Set KELLA__COMMANDS__PRIVATEKEY.");
-            }
+            throw new InvalidOperationException(
+                "Kella:Commands:PrivateKey is required (base64 Ed25519 seed). Set KELLA__COMMANDS__PRIVATEKEY.");
         }
 
         byte[] decoded;

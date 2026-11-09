@@ -25,7 +25,7 @@ public class BaselineTests : IClassFixture<WebApplicationFactory<Program>>
     {
         _factory = factory.WithWebHostBuilder(b =>
         {
-            b.UseEnvironment("Testing");
+            b.UseEnvironment("Development");
             b.UseSetting("ConnectionStrings:Postgres", "");
             b.UseSetting("Kella:RunPipelineInApi", "true");
             b.UseSetting("Kella:Jwt:Key", "kella-testing-only-signing-key-32b");

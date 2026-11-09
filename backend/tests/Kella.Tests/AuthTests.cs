@@ -19,7 +19,7 @@ public class AuthTests(WebApplicationFactory<Program> factory) : IClassFixture<W
 
     private readonly WebApplicationFactory<Program> _factory = factory.WithWebHostBuilder(b =>
     {
-        b.UseEnvironment("Testing");
+        b.UseEnvironment("Development");
         b.UseSetting("ConnectionStrings:Postgres", ""); // in-memory database
         b.UseSetting("Kella:Jwt:Key", "kella-testing-only-signing-key-32b");
         b.UseSetting("Kella:Jwt:SecureCookies", "false");
