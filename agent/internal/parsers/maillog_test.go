@@ -159,3 +159,17 @@ func TestParseMailLine_AuthenticatedVsInbound(t *testing.T) {
 		t.Errorf("expected no sasl_username for inbound mail, got %q", ev3.Attrs["sasl_username"])
 	}
 }
+
+func TestParseMailLine_SaslDigestMD5(t *testing.T) {
+	line := "Nov  8 02:14:15 mail-01 postfix/smtpd[4512]: warning: unknown[198.51.100.55]: SASL DIGEST-MD5 authentication failed: authentication failure"
+	ev := ParseMailLine(line, time.Now())
+	if ev == nil {
+		t.Fatal("expected event for SASL DIGEST-MD5, got nil")
+	}
+	if ev.Type != model.TypeMailAuthFailed {
+		t.Errorf("got type %q, want %q", ev.Type, model.TypeMailAuthFailed)
+	}
+	if ev.SourceIP != "198.51.100.55" {
+		t.Errorf("got IP %q, want '198.51.100.55'", ev.SourceIP)
+	}
+}

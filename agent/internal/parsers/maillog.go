@@ -22,7 +22,7 @@ var (
 	// Postfix smtpd SASL authentication failure
 	// e.g., postfix/smtpd[1234]: warning: unknown[198.51.100.55]: SASL LOGIN authentication failed: UGFzc3dvcmQ6
 	// e.g., postfix/smtpd[1234]: warning: mail.example.com[198.51.100.55]: SASL PLAIN authentication failed: authentication failure
-	postfixSaslFailed = regexp.MustCompile(`postfix/smtpd\[\d+\]: warning: [^\[]*\[([0-9a-fA-F.:]+)\]: SASL (?:LOGIN|PLAIN|DIGEST-MDMS|CRAM-MD5) authentication failed`)
+	postfixSaslFailed = regexp.MustCompile(`postfix/smtpd\[\d+\]: warning: [^\[]*\[([0-9a-fA-F.:]+)\]: SASL (?:LOGIN|PLAIN|DIGEST-MD5|CRAM-MD5) authentication failed`)
 
 	// Postfix smtpd SASL authenticated client line
 	// e.g., postfix/smtpd[4512]: 4Sxyz91234z: client=unknown[198.51.100.55], sasl_method=PLAIN, sasl_username=user@domain.com

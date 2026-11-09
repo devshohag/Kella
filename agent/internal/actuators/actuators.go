@@ -14,9 +14,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/devshohag/kella/agent/internal/model"
@@ -34,6 +36,7 @@ var (
 )
 
 type Runner struct {
+	mu            sync.Mutex
 	DryRun        bool
 	RequireSigned bool
 	PublicKey     ed25519.PublicKey
@@ -198,6 +201,45 @@ func validateSender(sender string) (string, error) {
 	return strings.ToLower(sender), nil
 }
 
+// writeSenderAccessAtomically writes content to a temp file in the same dir, fsyncs, and renames atomically, preserving file permissions.
+func writeSenderAccessAtomically(accessPath string, content []byte) error {
+	dir := filepath.Dir(accessPath)
+	mode := os.FileMode(0644)
+	if info, err := os.Stat(accessPath); err == nil {
+		mode = info.Mode().Perm()
+	}
+
+	tmpFile, err := os.CreateTemp(dir, "sender_access.*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpName := tmpFile.Name()
+	defer func() {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpName)
+	}()
+
+	_ = tmpFile.Chmod(mode)
+
+	if _, err := tmpFile.Write(content); err != nil {
+		return fmt.Errorf("write temp file: %w", err)
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("sync temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpName, accessPath); err != nil {
+		return fmt.Errorf("rename to %s: %w", accessPath, err)
+	}
+
+	return nil
+}
+
 // holdSender adds the sender to Postfix check_sender_access map with HOLD action (SPEC §8.5).
 // Idempotent: if sender already present, skips writing and re-syncing.
 func (r *Runner) holdSender(ctx context.Context, rawSender string) (string, error) {
@@ -205,6 +247,9 @@ func (r *Runner) holdSender(ctx context.Context, rawSender string) (string, erro
 	if err != nil {
 		return "", err
 	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	accessPath := r.SenderAccessPath
 	if accessPath == "" {
@@ -238,7 +283,7 @@ func (r *Runner) holdSender(ctx context.Context, rawSender string) (string, erro
 	outContent := strings.Join(lines, "\n") + "\n"
 
 	if !r.DryRun {
-		if writeErr := os.WriteFile(accessPath, []byte(outContent), 0644); writeErr != nil {
+		if writeErr := writeSenderAccessAtomically(accessPath, []byte(outContent)); writeErr != nil {
 			return "", fmt.Errorf("write sender_access: %w", writeErr)
 		}
 	}
@@ -264,6 +309,9 @@ func (r *Runner) releaseSender(ctx context.Context, rawSender string) (string, e
 	if err != nil {
 		return "", err
 	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	accessPath := r.SenderAccessPath
 	if accessPath == "" {
@@ -294,7 +342,7 @@ func (r *Runner) releaseSender(ctx context.Context, rawSender string) (string, e
 		if len(newLines) > 0 {
 			outContent = strings.Join(newLines, "\n") + "\n"
 		}
-		if writeErr := os.WriteFile(accessPath, []byte(outContent), 0644); writeErr != nil {
+		if writeErr := writeSenderAccessAtomically(accessPath, []byte(outContent)); writeErr != nil {
 			return "", fmt.Errorf("write sender_access: %w", writeErr)
 		}
 		if _, err := r.run(ctx, "postmap", accessPath); err != nil {

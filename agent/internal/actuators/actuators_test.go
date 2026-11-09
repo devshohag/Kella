@@ -5,9 +5,11 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -228,5 +230,73 @@ func TestReleaseSenderWithPostqueueJson(t *testing.T) {
 	}
 	if hasBadId {
 		t.Errorf("postsuper -H should not be called for non-matching sender: %v", *calls)
+	}
+}
+
+func TestHoldSenderConcurrent50(t *testing.T) {
+	tmpDir := t.TempDir()
+	accessPath := filepath.Join(tmpDir, "sender_access")
+
+	r, _ := newTestRunner(t, false, "")
+	r.SenderAccessPath = accessPath
+
+	const n = 50
+	var wg sync.WaitGroup
+	wg.Add(n)
+
+	errs := make(chan error, n)
+
+	for i := 0; i < n; i++ {
+		idx := i
+		go func() {
+			defer wg.Done()
+			sender := fmt.Sprintf("user%d@company.com", idx)
+			cmd := model.Command{
+				ID:        fmt.Sprintf("cmd_%d", idx),
+				Kind:      "hold_sender",
+				Params:    map[string]string{"sender": sender},
+				ExpiresAt: time.Now().Add(time.Minute),
+			}
+			_, err := r.Execute(context.Background(), cmd)
+			if err != nil {
+				errs <- err
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Fatalf("concurrent hold error: %v", err)
+	}
+
+	data, err := os.ReadFile(accessPath)
+	if err != nil {
+		t.Fatalf("read sender_access: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != n {
+		t.Fatalf("expected %d lines, got %d: %q", n, len(lines), string(data))
+	}
+
+	seen := make(map[string]bool)
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) != 2 || parts[1] != "HOLD" {
+			t.Fatalf("corrupted line %q", line)
+		}
+		if seen[parts[0]] {
+			t.Fatalf("duplicate entry %q", parts[0])
+		}
+		seen[parts[0]] = true
+	}
+
+	for i := 0; i < n; i++ {
+		expected := fmt.Sprintf("user%d@company.com", i)
+		if !seen[expected] {
+			t.Fatalf("missing sender %s", expected)
+		}
 	}
 }
