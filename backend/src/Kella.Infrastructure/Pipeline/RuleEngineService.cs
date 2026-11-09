@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Kella.Core;
+using Kella.Core.Actions;
 using Kella.Core.Domain;
 using Kella.Infrastructure.Data;
 using Kella.Infrastructure.Security;
@@ -115,13 +116,24 @@ public sealed class RuleEngineService(
             IncidentId = incident.Id,
         });
 
-        // Query active auto actions on this server to deduplicate auto actions
+        // Expire any queued actions older than their command's expiry (10 minutes)
         var now = DateTimeOffset.UtcNow;
-        var activeServerActions = await db.Actions
-            .Where(a => a.ServerId == evt.ServerId &&
-                        (a.Status == ActionStatus.Queued || a.Status == ActionStatus.Sent || a.Status == ActionStatus.Succeeded) &&
-                        (a.ExpiresAt == null || a.ExpiresAt > now))
+        var staleQueuedThreshold = now.AddMinutes(-10);
+        var staleQueuedActions = await db.Actions
+            .Where(a => a.ServerId == evt.ServerId && a.Status == ActionStatus.Queued && a.CreatedAt <= staleQueuedThreshold)
             .ToListAsync(ct);
+        foreach (var sq in staleQueuedActions)
+        {
+            sq.Status = ActionStatus.Expired;
+        }
+
+        // Query active auto actions on this server to deduplicate auto actions
+        var candidateServerActions = await db.Actions
+            .Where(a => a.ServerId == evt.ServerId &&
+                        (a.Status == ActionStatus.Queued || a.Status == ActionStatus.Sent || a.Status == ActionStatus.Succeeded))
+            .ToListAsync(ct);
+
+        var activeServerActions = candidateServerActions.Where(a => IsAutoActionActive(a, now)).ToList();
 
         var existingIncidentActions = await db.Actions
             .Where(a => a.IncidentId == incident.Id && a.Status != ActionStatus.Rejected && a.Status != ActionStatus.Failed)
@@ -144,6 +156,23 @@ public sealed class RuleEngineService(
                 if (duplicatePending) continue;
             }
 
+            DateTimeOffset? expiresAt = null;
+            if (s.Mode == ActionMode.Approval)
+            {
+                expiresAt = DateTimeOffset.UtcNow.AddHours(24);
+            }
+            else if (s.Mode == ActionMode.Auto)
+            {
+                if (s.Kind == ActionKinds.BlockIp && s.Params.TryGetValue("ttlSec", out var ttlStr) && int.TryParse(ttlStr, out var ttlSec))
+                {
+                    expiresAt = DateTimeOffset.UtcNow.AddSeconds(ttlSec);
+                }
+                else
+                {
+                    expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+                }
+            }
+
             var action = new KellaAction
             {
                 OrganizationId = evt.OrganizationId,
@@ -154,7 +183,7 @@ public sealed class RuleEngineService(
                 Mode = s.Mode,
                 Label = s.Label,
                 Status = s.Mode == ActionMode.Auto ? ActionStatus.Queued : ActionStatus.PendingApproval,
-                ExpiresAt = s.Mode == ActionMode.Approval ? DateTimeOffset.UtcNow.AddHours(24) : null,
+                ExpiresAt = expiresAt,
             };
             db.Actions.Add(action);
             activeServerActions.Add(action);
@@ -206,5 +235,23 @@ public sealed class RuleEngineService(
             if (!b.TryGetValue(k, out var bv) || bv != v) return false;
         }
         return true;
+    }
+
+    private static bool IsAutoActionActive(KellaAction a, DateTimeOffset now)
+    {
+        if (a.Status != ActionStatus.Queued && a.Status != ActionStatus.Sent && a.Status != ActionStatus.Succeeded)
+            return false;
+
+        if (a.Kind == ActionKinds.BlockIp && a.Params.TryGetValue("ttlSec", out var ttlStr) && int.TryParse(ttlStr, out var ttlSec))
+        {
+            return a.CreatedAt.AddSeconds(ttlSec) > now;
+        }
+
+        if (a.ExpiresAt.HasValue && a.Kind != ActionKinds.BlockIp)
+        {
+            return a.ExpiresAt.Value > now;
+        }
+
+        return a.CreatedAt.AddHours(1) > now;
     }
 }

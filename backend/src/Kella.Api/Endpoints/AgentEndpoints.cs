@@ -164,8 +164,15 @@ public static class AgentEndpoints
         var action = await db.Actions.FirstOrDefaultAsync(a => a.Id == cmd.ActionId, ct);
         if (action is not null)
         {
-            action.Status = ack.Ok ? ActionStatus.Succeeded : ActionStatus.Failed;
-            action.ExecutedAt = DateTimeOffset.UtcNow;
+            if (ack.Ok)
+            {
+                await Infrastructure.Pipeline.ActionLifecycleHelper.MarkActionSucceededAsync(db, action, ct);
+            }
+            else
+            {
+                action.Status = ActionStatus.Failed;
+                action.ExecutedAt = DateTimeOffset.UtcNow;
+            }
             action.ResultJson = System.Text.Json.JsonSerializer.Serialize(ack);
             db.AuditLog.Add(new AuditEntry
             {
