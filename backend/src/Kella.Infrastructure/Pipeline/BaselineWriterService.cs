@@ -37,7 +37,7 @@ public sealed class BaselineWriterService(
             e."ServerId",
             LOWER(COALESCE(NULLIF(e."Attrs"->>'sasl_username', ''), e."Attrs"->>'sender')) AS "Sender",
             FLOOR(EXTRACT(EPOCH FROM e."Ts") / 600)::bigint AS "BucketId",
-            (((EXTRACT(DOW FROM e."Ts")::int + 6) % 7) * 24 + EXTRACT(HOUR FROM e."Ts")::int) AS "HourOfWeek",
+            (((EXTRACT(DOW FROM e."Ts" AT TIME ZONE 'UTC')::int + 6) % 7) * 24 + EXTRACT(HOUR FROM e."Ts" AT TIME ZONE 'UTC')::int) AS "HourOfWeek",
             COUNT(*)::int AS "Count",
             MIN(e."Ts") AS "MinTs",
             MAX(e."Ts") AS "MaxTs"
