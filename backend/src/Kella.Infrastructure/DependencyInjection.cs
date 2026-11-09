@@ -54,6 +54,8 @@ public static class DependencyInjection
         services.AddHostedService(sp => sp.GetRequiredService<IpReputationService>());
         services.AddSingleton<BaselineWriterService>();
         services.AddHostedService(sp => sp.GetRequiredService<BaselineWriterService>());
+        services.AddSingleton<ServerHealthMonitor>();
+        services.AddHostedService(sp => sp.GetRequiredService<ServerHealthMonitor>());
         return services;
     }
 }

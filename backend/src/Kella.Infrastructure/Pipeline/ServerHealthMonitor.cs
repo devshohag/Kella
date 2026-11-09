@@ -77,7 +77,9 @@ public sealed class ServerHealthMonitor(
                 server.UpdatedAt = now;
 
                 var alreadyOpen = await db.Incidents.AnyAsync(i =>
-                    i.ServerId == server.Id && i.Type == "server.down" && i.Status != IncidentStatus.Resolved, ct);
+                    i.ServerId == server.Id &&
+                    (i.Type == "server" || i.Type == "server.down" || i.Type.StartsWith("server.")) &&
+                    i.Status != IncidentStatus.Resolved, ct);
                 if (alreadyOpen) continue;
 
                 var number = (await db.Incidents.MaxAsync(i => (int?)i.Number, ct) ?? 2000) + 1;
@@ -86,7 +88,7 @@ public sealed class ServerHealthMonitor(
                     OrganizationId = organizationId,
                     Number = number,
                     ServerId = server.Id,
-                    Type = "server.down",
+                    Type = "server",
                     Severity = Severity.Down,
                     Title = $"Server {server.Name} stopped reporting",
                     Summary = $"No heartbeat from {server.Name} since {server.LastSeenAt:u}.",

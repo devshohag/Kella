@@ -10,6 +10,7 @@ export interface IncidentListItem {
   severity: Severity
   status: IncidentStatus
   openedAt: string
+  type?: string
 }
 
 export interface Overview {
@@ -112,7 +113,13 @@ export const api = {
   servers: () => request<ServerListItem[]>('/api/servers'),
   server: (id: string) => request<ServerListItem>(`/api/servers/${id}`),
   createEnrollmentKey: () => request<EnrollmentKey>('/api/servers/enrollment-keys', { method: 'POST' }),
-  incidents: (status?: IncidentStatus) => request<IncidentListItem[]>(`/api/incidents${status ? `?status=${status}` : ''}`),
+  incidents: (status?: IncidentStatus, type?: string) => {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (type) params.set('type', type)
+    const qs = params.toString()
+    return request<IncidentListItem[]>(`/api/incidents${qs ? `?${qs}` : ''}`)
+  },
   incident: (id: string) => request<IncidentDetail>(`/api/incidents/${id}`),
   approveAction: (id: string) => request<void>(`/api/actions/${id}/approve`, { method: 'POST' }),
 }

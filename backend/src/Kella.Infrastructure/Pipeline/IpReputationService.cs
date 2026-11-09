@@ -152,7 +152,7 @@ public sealed class IpReputationService(
                         var openInc = await db.Incidents.IgnoreQueryFilters()
                             .Where(i => i.OrganizationId == target.OrganizationId &&
                                         i.ServerId == target.ServerId &&
-                                        i.Type == "mail.ip_reputation" &&
+                                        (i.Type == "mail" || i.Type == "mail.ip_reputation" || i.Type.StartsWith("mail.")) &&
                                         (i.Status == IncidentStatus.Open || i.Status == IncidentStatus.Contained))
                             .OrderByDescending(i => i.OpenedAt)
                             .FirstOrDefaultAsync(ct);
@@ -188,7 +188,7 @@ public sealed class IpReputationService(
         {
             OrganizationId = organizationId,
             ServerId = serverId,
-            Type = "mail.ip_reputation",
+            Type = "mail",
             Severity = Severity.Warning,
             Title = $"Sending IP {publicIp} listed on DNSBL",
             Summary = $"IP {publicIp} returned {returnCode} on public DNSBL. Outbound deliverability impacted.",

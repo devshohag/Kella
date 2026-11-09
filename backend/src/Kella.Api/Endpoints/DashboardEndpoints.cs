@@ -7,7 +7,7 @@ using Kella.Infrastructure.Security;
 namespace Kella.Api.Endpoints;
 
 public sealed record OverviewDto(int ServersOnline, int ServersTotal, int Tenants, int OpenIncidents, int PendingApprovals, IReadOnlyList<IncidentListItem> ActiveIncidents);
-public sealed record IncidentListItem(Guid Id, string Number, string Title, string Severity, string Status, DateTimeOffset OpenedAt);
+public sealed record IncidentListItem(Guid Id, string Number, string Title, string Severity, string Status, DateTimeOffset OpenedAt, string Type);
 public sealed record ServerListItem(Guid Id, string Name, string? PublicIp, string Status, IReadOnlyList<string> Detected, IReadOnlyList<string> Guards, DateTimeOffset? LastSeenAt);
 public sealed record EnrollmentKeyResponse(string Key, DateTimeOffset ExpiresAt, string InstallCommand);
 
@@ -90,10 +90,15 @@ public static class DashboardEndpoints
             return new EnrollmentKeyResponse(key, entity.ExpiresAt, $"curl -sSL {installUrl} | sudo sh -s -- --key {key}");
         });
 
-        g.MapGet("/incidents", async (KellaDbContext db, string? status, CancellationToken ct) =>
+        g.MapGet("/incidents", async (KellaDbContext db, string? status, string? type, CancellationToken ct) =>
         {
             var q = db.Incidents.AsQueryable();
             if (Enum.TryParse<IncidentStatus>(status, true, out var st)) q = q.Where(i => i.Status == st);
+            if (!string.IsNullOrWhiteSpace(type))
+            {
+                var family = type.Contains('.') ? type.Split('.')[0] : type;
+                q = q.Where(i => i.Type == type || i.Type == family || i.Type.StartsWith(family + "."));
+            }
             return (await q.OrderByDescending(i => i.OpenedAt).Take(200).ToListAsync(ct)).Select(ToListItem);
         });
 
@@ -144,7 +149,7 @@ public static class DashboardEndpoints
     }
 
     private static IncidentListItem ToListItem(Incident i) =>
-        new(i.Id, $"INC-{i.Number}", i.Title, i.Severity.ToString(), i.Status.ToString(), i.OpenedAt);
+        new(i.Id, $"INC-{i.Number}", i.Title, i.Severity.ToString(), i.Status.ToString(), i.OpenedAt, i.Type);
 }
 
 public sealed class RequireOrgFilter(Infrastructure.OrgContext org) : IEndpointFilter
