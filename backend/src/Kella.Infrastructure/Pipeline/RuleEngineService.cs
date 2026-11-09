@@ -63,7 +63,7 @@ public sealed class RuleEngineService(
             incident = new Incident
             {
                 OrganizationId = evt.OrganizationId,
-                Number = (db.Incidents.Max(i => (int?)i.Number) ?? 2000) + 1,
+                Number = await IncidentNumberAllocator.AllocateNextNumberAsync(db, evt.OrganizationId, ct),
                 TenantId = evt.TenantId,
                 ServerId = evt.ServerId,
                 Type = match.RuleCode,

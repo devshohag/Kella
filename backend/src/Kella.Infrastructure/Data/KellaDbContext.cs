@@ -30,6 +30,7 @@ public sealed class KellaDbContext(DbContextOptions<KellaDbContext> options, IOr
     public DbSet<Baseline> Baselines => Set<Baseline>();
     public DbSet<AuditEntry> AuditLog => Set<AuditEntry>();
     public DbSet<TelegramUpdate> TelegramUpdates => Set<TelegramUpdate>();
+    public DbSet<IpReputation> IpReputations => Set<IpReputation>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -84,6 +85,8 @@ public sealed class KellaDbContext(DbContextOptions<KellaDbContext> options, IOr
 
         b.Entity<TelegramUpdate>().ToTable("telegram_updates").HasKey(x => x.UpdateId);
         b.Entity<TelegramUpdate>().Property(x => x.UpdateId).ValueGeneratedNever();
+
+        b.Entity<IpReputation>().ToTable("ip_reputation").HasIndex(x => new { x.OrganizationId, x.Ip }).IsUnique();
 
         foreach (var type in b.Model.GetEntityTypes().Where(t => typeof(IOrgScoped).IsAssignableFrom(t.ClrType)))
         {

@@ -412,6 +412,48 @@ namespace Kella.Infrastructure.Migrations
                     b.ToTable("incidents", (string)null);
                 });
 
+            modelBuilder.Entity("Kella.Core.Domain.IpReputation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Ip")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("LastChecked")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Listed")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("ListedSince")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReturnCode")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ServerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Ip")
+                        .IsUnique();
+
+                    b.ToTable("ip_reputation", (string)null);
+                });
+
             modelBuilder.Entity("Kella.Core.Domain.KellaAction", b =>
                 {
                     b.Property<Guid>("Id")

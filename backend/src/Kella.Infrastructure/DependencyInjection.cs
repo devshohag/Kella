@@ -29,6 +29,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IEventBus, InProcessEventBus>();
         services.AddSingleton<CommandSigner>();
+        services.AddSingleton<IDnsResolver, SystemDnsResolver>();
         services.AddSingleton<DbBaselineProvider>();
         services.AddSingleton<IBaselineProvider>(sp => sp.GetRequiredService<DbBaselineProvider>());
         services.AddScoped<IAlertRouter, Alerting.AlertRouter>();
@@ -48,7 +49,8 @@ public static class DependencyInjection
     public static IServiceCollection AddKellaPipeline(this IServiceCollection services)
     {
         services.AddHostedService<RuleEngineService>();
-        services.AddHostedService<IpReputationService>();
+        services.AddSingleton<IpReputationService>();
+        services.AddHostedService(sp => sp.GetRequiredService<IpReputationService>());
         services.AddSingleton<BaselineWriterService>();
         services.AddHostedService(sp => sp.GetRequiredService<BaselineWriterService>());
         return services;

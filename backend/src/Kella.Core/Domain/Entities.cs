@@ -235,3 +235,14 @@ public sealed class TelegramUpdate
     public long UpdateId { get; set; }
     public DateTimeOffset ProcessedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+public sealed class IpReputation : Entity, IOrgScoped
+{
+    public Guid OrganizationId { get; set; }
+    public Guid ServerId { get; set; }
+    public required string Ip { get; set; }
+    public bool Listed { get; set; }
+    public string? ReturnCode { get; set; }
+    public DateTimeOffset? ListedSince { get; set; }
+    public DateTimeOffset LastChecked { get; set; } = DateTimeOffset.UtcNow;
+}
