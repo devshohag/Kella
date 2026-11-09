@@ -14,13 +14,60 @@ using Microsoft.Extensions.Logging;
 
 namespace Kella.Infrastructure.Pipeline;
 
+public sealed class SenderBucketRow
+{
+    public Guid OrganizationId { get; set; }
+    public Guid ServerId { get; set; }
+    public string Sender { get; set; } = "";
+    public long BucketId { get; set; }
+    public int HourOfWeek { get; set; }
+    public int Count { get; set; }
+    public DateTimeOffset MinTs { get; set; }
+    public DateTimeOffset MaxTs { get; set; }
+}
+
 public sealed class BaselineWriterService(
     IServiceScopeFactory scopes,
     IBaselineProvider baselineProvider,
     ILogger<BaselineWriterService> logger) : BackgroundService
 {
+    public const string BucketAggregationSql = """
+        SELECT 
+            e."OrganizationId",
+            e."ServerId",
+            LOWER(COALESCE(NULLIF(e."Attrs"->>'sasl_username', ''), e."Attrs"->>'sender')) AS "Sender",
+            FLOOR(EXTRACT(EPOCH FROM e."Ts") / 600)::bigint AS "BucketId",
+            (((EXTRACT(DOW FROM e."Ts")::int + 6) % 7) * 24 + EXTRACT(HOUR FROM e."Ts")::int) AS "HourOfWeek",
+            COUNT(*)::int AS "Count",
+            MIN(e."Ts") AS "MinTs",
+            MAX(e."Ts") AS "MaxTs"
+        FROM events e
+        WHERE e."Module" = 'mail'
+          AND e."Type" = 'mail.message_queued'
+          AND e."Ts" >= {0}
+          AND LOWER(e."Attrs"->>'authenticated') = 'true'
+          AND COALESCE(NULLIF(e."Attrs"->>'sasl_username', ''), e."Attrs"->>'sender') IS NOT NULL
+        GROUP BY e."OrganizationId", e."ServerId", 3, 4, 5
+        """;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // SPEC §9: Call PopulateFromDatabase for all orgs at startup
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+            var orgs = await db.Organizations.IgnoreQueryFilters().Select(o => o.Id).ToListAsync(stoppingToken);
+            foreach (var orgId in orgs)
+            {
+                baselineProvider.PopulateFromDatabase(orgId);
+            }
+        }
+        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+        {
+            logger.LogError(ex, "Failed to initialize baselines from database at startup.");
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -46,35 +93,96 @@ public sealed class BaselineWriterService(
         var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
 
         var since = DateTimeOffset.UtcNow.AddDays(-30);
-        var events = await db.Events
-            .IgnoreQueryFilters()
-            .Where(e => e.Module == Modules.Mail && e.Type == EventTypes.MailMessageQueued && e.Ts >= since)
-            .Select(e => new { e.OrganizationId, e.ServerId, e.Ts, e.Attrs })
-            .ToListAsync(ct);
 
-        var bySender = events
-            .Where(e => e.Attrs.TryGetValue("authenticated", out var a) && string.Equals(a, "true", StringComparison.OrdinalIgnoreCase))
-            .Select(e =>
+        List<SenderBucketRow> buckets;
+        if (db.Database.IsRelational())
+        {
+            buckets = await db.Database.SqlQueryRaw<SenderBucketRow>(BucketAggregationSql, since).ToListAsync(ct);
+        }
+        else
+        {
+            var bucketsMap = new Dictionary<(Guid OrgId, Guid ServerId, string Sender, long BucketId), SenderBucketRow>();
+            await foreach (var e in db.Events
+                .IgnoreQueryFilters()
+                .Where(e => e.Module == Modules.Mail && e.Type == EventTypes.MailMessageQueued && e.Ts >= since)
+                .AsAsyncEnumerable()
+                .WithCancellation(ct))
             {
+                if (!e.Attrs.TryGetValue("authenticated", out var auth) || !string.Equals(auth, "true", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 string sender = "";
                 if (e.Attrs.TryGetValue("sasl_username", out var su) && !string.IsNullOrWhiteSpace(su))
                     sender = su.Trim().ToLowerInvariant();
                 else if (e.Attrs.TryGetValue("sender", out var s) && !string.IsNullOrWhiteSpace(s))
                     sender = s.Trim().ToLowerInvariant();
 
-                return new { e.OrganizationId, e.ServerId, e.Ts, Sender = sender };
-            })
-            .Where(e => !string.IsNullOrWhiteSpace(e.Sender))
-            .GroupBy(e => (
-                e.OrganizationId,
-                e.ServerId,
-                e.Sender
-            ));
+                if (string.IsNullOrWhiteSpace(sender))
+                    continue;
+
+                long bucketId = e.Ts.ToUnixTimeSeconds() / 600;
+                var key = (e.OrganizationId, e.ServerId, sender, bucketId);
+                if (bucketsMap.TryGetValue(key, out var row))
+                {
+                    row.Count++;
+                    if (e.Ts > row.MaxTs) row.MaxTs = e.Ts;
+                    if (e.Ts < row.MinTs) row.MinTs = e.Ts;
+                }
+                else
+                {
+                    var utc = e.Ts.UtcDateTime;
+                    int dayIndex = ((int)utc.DayOfWeek + 6) % 7;
+                    int hourOfWeek = (dayIndex * 24) + utc.Hour;
+                    bucketsMap[key] = new SenderBucketRow
+                    {
+                        OrganizationId = e.OrganizationId,
+                        ServerId = e.ServerId,
+                        Sender = sender,
+                        BucketId = bucketId,
+                        HourOfWeek = hourOfWeek,
+                        Count = 1,
+                        MinTs = e.Ts,
+                        MaxTs = e.Ts
+                    };
+                }
+            }
+            buckets = bucketsMap.Values.ToList();
+        }
+
+        // Exclude buckets that already triggered an outbound_spike incident
+        var spikeFindings = await db.Findings
+            .IgnoreQueryFilters()
+            .Where(f => f.RuleCode == "mail.outbound_spike" && f.IncidentId != null)
+            .ToListAsync(ct);
+
+        if (spikeFindings.Count > 0)
+        {
+            var excludedSpikes = spikeFindings.Select(f =>
+            {
+                string sender = "";
+                if (f.Evidence.TryGetValue("sender", out var s) && !string.IsNullOrWhiteSpace(s))
+                    sender = s.Trim().ToLowerInvariant();
+
+                long startBucket = f.FirstSeen.AddMinutes(-10).ToUnixTimeSeconds() / 600;
+                long endBucket = f.LastSeen.AddMinutes(1).ToUnixTimeSeconds() / 600;
+                return (f.OrganizationId, f.ServerId, Sender: sender, StartBucket: startBucket, EndBucket: endBucket);
+            }).ToList();
+
+            buckets = buckets.Where(b => !excludedSpikes.Any(s =>
+                s.OrganizationId == b.OrganizationId &&
+                s.ServerId == b.ServerId &&
+                s.Sender == b.Sender &&
+                b.BucketId >= s.StartBucket &&
+                b.BucketId <= s.EndBucket
+            )).ToList();
+        }
+
+        var bySender = buckets.GroupBy(b => (b.OrganizationId, b.ServerId, b.Sender));
 
         foreach (var group in bySender)
         {
-            var minTs = group.Min(e => e.Ts);
-            var maxTs = group.Max(e => e.Ts);
+            var minTs = group.Min(e => e.MinTs);
+            var maxTs = group.Max(e => e.MaxTs);
 
             // SPEC §9: until 24 h of data exist -> no baseline row
             if ((maxTs - minTs) < TimeSpan.FromHours(24))
@@ -82,18 +190,7 @@ public sealed class BaselineWriterService(
 
             var entityKey = $"{group.Key.ServerId}:{group.Key.Sender}";
 
-            // Group into 10-minute buckets:
-            var tenMinuteBuckets = group
-                .GroupBy(e =>
-                {
-                    var utc = e.Ts.UtcDateTime;
-                    long bucketId = new DateTimeOffset(utc).ToUnixTimeSeconds() / 600;
-                    int dayIndex = ((int)utc.DayOfWeek + 6) % 7; // Monday=0 ... Sunday=6
-                    int hourOfWeek = (dayIndex * 24) + utc.Hour;
-                    return (HourOfWeek: hourOfWeek, BucketId: bucketId);
-                })
-                .Select(g => new { g.Key.HourOfWeek, Count = g.Count() })
-                .GroupBy(b => b.HourOfWeek);
+            var tenMinuteBuckets = group.GroupBy(b => b.HourOfWeek);
 
             foreach (var hourGroup in tenMinuteBuckets)
             {

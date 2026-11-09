@@ -8,11 +8,17 @@ public interface IBaselineProvider
     double? GetP95(Guid organizationId, string entityKind, string entityId, int hourOfWeek);
 
     void UpdateCache(Guid organizationId, string entityKind, string entityId, int hourOfWeek, double p95);
+
+    void PopulateFromDatabase(Guid organizationId);
 }
 
 public sealed class InMemoryBaselineProvider : IBaselineProvider
 {
     private readonly Dictionary<string, double> _p95Values = new(StringComparer.Ordinal);
+
+    public void PopulateFromDatabase(Guid organizationId)
+    {
+    }
 
     public void SetBaseline(Guid organizationId, string entityKind, string entityId, int hourOfWeek, double p95)
     {
