@@ -215,7 +215,6 @@ public sealed class Baseline : Entity, IOrgScoped
     public int HourOfWeek { get; set; }
     public double P50 { get; set; }
     public double P95 { get; set; }
-    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 public sealed class AuditEntry : IOrgScoped

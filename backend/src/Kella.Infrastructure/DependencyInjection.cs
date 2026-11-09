@@ -48,7 +48,8 @@ public static class DependencyInjection
     /// <summary>Workers that consume the event bus. Hosted by Kella.Worker, or by the API in single-process dev mode.</summary>
     public static IServiceCollection AddKellaPipeline(this IServiceCollection services)
     {
-        services.AddHostedService<RuleEngineService>();
+        services.AddSingleton<RuleEngineService>();
+        services.AddHostedService(sp => sp.GetRequiredService<RuleEngineService>());
         services.AddSingleton<IpReputationService>();
         services.AddHostedService(sp => sp.GetRequiredService<IpReputationService>());
         services.AddSingleton<BaselineWriterService>();

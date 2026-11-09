@@ -39,6 +39,9 @@ public sealed class RuleEngineService(
         }
     }
 
+    public Task PersistMatchAsync(KellaEvent evt, RuleMatch match, CancellationToken ct = default) =>
+        PersistAsync(evt, match, ct);
+
     private async Task PersistAsync(KellaEvent evt, RuleMatch match, CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
@@ -48,15 +51,26 @@ public sealed class RuleEngineService(
         var router = scope.ServiceProvider.GetRequiredService<IAlertRouter>();
 
         var twoHoursAgo = evt.Ts.AddHours(-2);
-        // Look for open incident with same server, tenant and type family
-        var incident = await db.Incidents
-            .FirstOrDefaultAsync(i => i.ServerId == evt.ServerId &&
-                                      i.TenantId == evt.TenantId &&
-                                      i.Type == match.RuleCode &&
-                                      i.Status != IncidentStatus.Resolved &&
-                                      i.OpenedAt >= twoHoursAgo, ct);
+        var family = match.RuleCode.Contains('.') ? match.RuleCode.Split('.')[0] : match.RuleCode;
+
+        // Look for open incident with same server, tenant and type family opened within the last 2 hours
+        var openIncidents = await db.Incidents
+            .Where(i => i.ServerId == evt.ServerId &&
+                        i.TenantId == evt.TenantId &&
+                        i.Status != IncidentStatus.Resolved &&
+                        i.OpenedAt >= twoHoursAgo)
+            .OrderByDescending(i => i.OpenedAt)
+            .ToListAsync(ct);
+
+        var incident = openIncidents.FirstOrDefault(i =>
+            i.Type == family ||
+            i.Type.StartsWith(family + ".") ||
+            (i.Type.Contains('.') && i.Type.Split('.')[0] == family));
 
         var isNewIncident = false;
+        var severityIncreased = false;
+        var newApprovalActionAdded = false;
+
         if (incident is null)
         {
             isNewIncident = true;
@@ -66,7 +80,7 @@ public sealed class RuleEngineService(
                 Number = await IncidentNumberAllocator.AllocateNextNumberAsync(db, evt.OrganizationId, ct),
                 TenantId = evt.TenantId,
                 ServerId = evt.ServerId,
-                Type = match.RuleCode,
+                Type = family,
                 Severity = match.Severity,
                 Title = match.Title,
                 Summary = match.Summary,
@@ -80,6 +94,7 @@ public sealed class RuleEngineService(
             if (match.Severity > incident.Severity)
             {
                 incident.Severity = match.Severity;
+                severityIncreased = true;
             }
             incident.Summary = $"{incident.Summary}\n{match.Summary}".Trim();
             incident.UpdatedAt = DateTimeOffset.UtcNow;
@@ -100,19 +115,34 @@ public sealed class RuleEngineService(
             IncidentId = incident.Id,
         });
 
-        // Query existing active/queued actions on this incident to avoid duplicate actions/commands
-        var existingActions = await db.Actions
+        // Query active auto actions on this server to deduplicate auto actions
+        var now = DateTimeOffset.UtcNow;
+        var activeServerActions = await db.Actions
+            .Where(a => a.ServerId == evt.ServerId &&
+                        (a.Status == ActionStatus.Queued || a.Status == ActionStatus.Sent || a.Status == ActionStatus.Succeeded) &&
+                        (a.ExpiresAt == null || a.ExpiresAt > now))
+            .ToListAsync(ct);
+
+        var existingIncidentActions = await db.Actions
             .Where(a => a.IncidentId == incident.Id && a.Status != ActionStatus.Rejected && a.Status != ActionStatus.Failed)
             .ToListAsync(ct);
 
         foreach (var s in match.Actions)
         {
-            // Check if identical action already queued or pending
-            var duplicate = existingActions.Any(ea =>
-                ea.Kind == s.Kind &&
-                s.Params.All(kv => ea.Params.TryGetValue(kv.Key, out var ev) && ev == kv.Value));
-
-            if (duplicate) continue;
+            if (s.Mode == ActionMode.Auto)
+            {
+                var duplicateAuto = activeServerActions.Any(ea =>
+                    ea.Kind == s.Kind &&
+                    ParamsEqual(ea.Params, s.Params));
+                if (duplicateAuto) continue;
+            }
+            else
+            {
+                var duplicatePending = existingIncidentActions.Any(ea =>
+                    ea.Kind == s.Kind &&
+                    ParamsEqual(ea.Params, s.Params));
+                if (duplicatePending) continue;
+            }
 
             var action = new KellaAction
             {
@@ -127,8 +157,14 @@ public sealed class RuleEngineService(
                 ExpiresAt = s.Mode == ActionMode.Approval ? DateTimeOffset.UtcNow.AddHours(24) : null,
             };
             db.Actions.Add(action);
+            activeServerActions.Add(action);
+            existingIncidentActions.Add(action);
 
-            if (s.Mode == ActionMode.Auto)
+            if (s.Mode == ActionMode.Approval)
+            {
+                newApprovalActionAdded = true;
+            }
+            else if (s.Mode == ActionMode.Auto)
             {
                 db.AgentCommands.Add(AgentCommands.Queue(
                     signer,
@@ -153,9 +189,22 @@ public sealed class RuleEngineService(
         }
 
         await db.SaveChangesAsync(ct);
-        log.LogInformation("INC-{Number} opened by {Rule}: {Title}", incident.Number, match.RuleCode, match.Title);
+        log.LogInformation("INC-{Number} processed for rule {Rule}: {Title}", incident.Number, match.RuleCode, match.Title);
 
-        try { await router.RouteAsync(incident, ct); }
-        catch (Exception ex) { log.LogError(ex, "Routing alerts for INC-{Number} failed", incident.Number); }
+        if (isNewIncident || severityIncreased || newApprovalActionAdded)
+        {
+            try { await router.RouteAsync(incident, ct); }
+            catch (Exception ex) { log.LogError(ex, "Routing alerts for INC-{Number} failed", incident.Number); }
+        }
+    }
+
+    private static bool ParamsEqual(IReadOnlyDictionary<string, string> a, IReadOnlyDictionary<string, string> b)
+    {
+        if (a.Count != b.Count) return false;
+        foreach (var (k, v) in a)
+        {
+            if (!b.TryGetValue(k, out var bv) || bv != v) return false;
+        }
+        return true;
     }
 }
