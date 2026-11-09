@@ -153,24 +153,14 @@ public sealed class MailAccountTakeoverRule : IRule
                     Code,
                     Severity.Critical,
                     $"Account takeover detected for {sender}",
-                    $"{authFailures} recent failed authentications followed by outbound spike ({outboundCount} msgs) on {sender}.",
+                    $"{authFailures} recent failed authentications followed by outbound spike ({outboundCount} msgs) on {sender}. Note: Password reset and message purge must be done manually by the admin.",
                     evidence,
                     [
                         new SuggestedAction(
                             ActionKinds.HoldSender,
                             new Dictionary<string, string> { ["sender"] = sender },
                             ActionMode.Auto,
-                            $"Hold messages from {sender}"),
-                        new SuggestedAction(
-                            ActionKinds.ResetMailboxPassword,
-                            new Dictionary<string, string> { ["mailbox"] = sender },
-                            ActionMode.Approval,
-                            $"Reset password for {sender}"),
-                        new SuggestedAction(
-                            ActionKinds.DeleteHeldMessages,
-                            new Dictionary<string, string> { ["sender"] = sender },
-                            ActionMode.Approval,
-                            $"Delete held messages from {sender}"),
+                            $"Hold messages from {sender}")
                     ]);
             }
         }

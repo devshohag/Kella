@@ -221,8 +221,44 @@ public class RuleTests
         Assert.NotNull(match);
         Assert.Equal("mail.account_takeover", match.RuleCode);
         Assert.Equal(Severity.Critical, match.Severity);
+        Assert.Single(match.Actions);
         Assert.Contains(match.Actions, a => a.Kind == ActionKinds.HoldSender && a.Mode == ActionMode.Auto);
-        Assert.Contains(match.Actions, a => a.Kind == ActionKinds.ResetMailboxPassword && a.Mode == ActionMode.Approval);
-        Assert.Contains(match.Actions, a => a.Kind == ActionKinds.DeleteHeldMessages && a.Mode == ActionMode.Approval);
+    }
+
+    [Fact]
+    public void Mail_account_takeover_returns_only_hold_sender_auto_action()
+    {
+        var rule = new MailAccountTakeoverRule(minOutboundSpike: 1);
+        var t0 = DateTimeOffset.Parse("2026-11-08T02:00:00Z");
+
+        for (var i = 0; i < 5; i++)
+        {
+            rule.Evaluate(new KellaEvent
+            {
+                OrganizationId = Guid.NewGuid(),
+                ServerId = Server,
+                Ts = t0.AddSeconds(i),
+                Module = Modules.Mail,
+                Type = EventTypes.MailAuthFailed,
+                Attrs = new() { ["user"] = "victim@example.com" }
+            });
+        }
+
+        var match = rule.Evaluate(new KellaEvent
+        {
+            OrganizationId = Guid.NewGuid(),
+            ServerId = Server,
+            Ts = t0.AddSeconds(10),
+            Module = Modules.Mail,
+            Type = EventTypes.MailMessageQueued,
+            Attrs = new() { ["sender"] = "victim@example.com" }
+        });
+
+        Assert.NotNull(match);
+        Assert.Single(match.Actions);
+        var action = match.Actions[0];
+        Assert.Equal(ActionKinds.HoldSender, action.Kind);
+        Assert.Equal(ActionMode.Auto, action.Mode);
+        Assert.DoesNotContain(match.Actions, a => a.Mode == ActionMode.Approval);
     }
 }
