@@ -82,6 +82,7 @@ public sealed class RuleEngineService(
                 TenantId = evt.TenantId,
                 ServerId = evt.ServerId,
                 Type = family,
+                Subtype = match.RuleCode,
                 Severity = match.Severity,
                 Title = match.Title,
                 Summary = match.Summary,

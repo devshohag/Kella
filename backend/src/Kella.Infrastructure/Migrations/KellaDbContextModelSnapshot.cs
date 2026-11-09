@@ -396,6 +396,9 @@ namespace Kella.Infrastructure.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Subtype")
+                        .HasColumnType("text");
+
                     b.Property<string>("Summary")
                         .IsRequired()
                         .HasColumnType("text");

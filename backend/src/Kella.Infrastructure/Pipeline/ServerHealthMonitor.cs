@@ -78,23 +78,25 @@ public sealed class ServerHealthMonitor(
 
                 var alreadyOpen = await db.Incidents.AnyAsync(i =>
                     i.ServerId == server.Id &&
-                    (i.Type == "server" || i.Type == "server.down" || i.Type.StartsWith("server.")) &&
+                    i.Subtype == "server.down" &&
                     i.Status != IncidentStatus.Resolved, ct);
-                if (alreadyOpen) continue;
+                if (alreadyOpen)
+                {
+                    await db.SaveChangesAsync(ct);
+                    continue;
+                }
 
-                var number = (await db.Incidents.MaxAsync(i => (int?)i.Number, ct) ?? 2000) + 1;
                 var incident = new Incident
                 {
                     OrganizationId = organizationId,
-                    Number = number,
                     ServerId = server.Id,
                     Type = "server",
+                    Subtype = "server.down",
                     Severity = Severity.Down,
                     Title = $"Server {server.Name} stopped reporting",
                     Summary = $"No heartbeat from {server.Name} since {server.LastSeenAt:u}.",
                     OpenedAt = now,
                 };
-                db.Incidents.Add(incident);
                 db.Findings.Add(new Finding
                 {
                     OrganizationId = organizationId,
@@ -120,7 +122,7 @@ public sealed class ServerHealthMonitor(
                     Verb = "incident.opened",
                     Target = $"incident:{incident.Id}",
                 });
-                await db.SaveChangesAsync(ct);
+                await IncidentNumberAllocator.SaveIncidentWithRetryAsync(db, incident, ct);
 
                 log.LogWarning("INC-{Number}: {Title}", incident.Number, incident.Title);
                 await router.RouteAsync(incident, ct);

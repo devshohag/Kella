@@ -30,7 +30,7 @@ public class IncidentTypeFamilyTests : IClassFixture<WebApplicationFactory<Progr
     }
 
     [Fact]
-    public async Task ServerHealthMonitor_recognizes_open_incident_with_family_type_server()
+    public async Task ServerHealthMonitor_opens_server_down_when_another_server_incident_is_open()
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
@@ -46,15 +46,15 @@ public class IncidentTypeFamilyTests : IClassFixture<WebApplicationFactory<Progr
         };
         db.Servers.Add(server);
 
-        // Pre-existing incident with family "server"
+        // An unrelated server-family alert (e.g. server.cpu_high) is already open.
         var existingIncident = new Incident
         {
             OrganizationId = org.Id,
             ServerId = server.Id,
             Number = 5001,
             Type = "server",
-            Severity = Severity.Down,
-            Title = "Server down",
+            Severity = Severity.Warning,
+            Title = "CPU high",
             OpenedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
             Status = IncidentStatus.Open
         };
@@ -64,12 +64,56 @@ public class IncidentTypeFamilyTests : IClassFixture<WebApplicationFactory<Progr
         var monitor = scope.ServiceProvider.GetRequiredService<ServerHealthMonitor>();
         await monitor.CheckOnceAsync(default);
 
-        // Must NOT create a duplicate incident because an open "server" incident already exists
+        // The unrelated server incident must not suppress the outage incident.
         var incidents = await db.Incidents.IgnoreQueryFilters()
             .Where(i => i.ServerId == server.Id && i.Status != IncidentStatus.Resolved)
             .ToListAsync();
 
-        Assert.Single(incidents);
+        Assert.Equal(2, incidents.Count);
+        var down = Assert.Single(incidents, i => i.Title.Contains("stopped reporting", StringComparison.Ordinal));
+        Assert.Equal("server.down", down.Subtype);
+        Assert.True(down.Number > existingIncident.Number, "server.down must use the shared incident number allocator");
+    }
+
+    [Fact]
+    public async Task ServerHealthMonitor_does_not_duplicate_an_open_server_down_incident()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<KellaDbContext>();
+
+        var org = new Organization { Name = "Health Mon Duplicate Org" };
+        db.Organizations.Add(org);
+        var server = new Server
+        {
+            OrganizationId = org.Id,
+            Name = "srv-down-duplicate",
+            Status = ServerStatus.Online,
+            LastSeenAt = DateTimeOffset.UtcNow.AddMinutes(-10)
+        };
+        db.Servers.Add(server);
+        db.Incidents.Add(new Incident
+        {
+            OrganizationId = org.Id,
+            ServerId = server.Id,
+            Number = 5101,
+            Type = "server",
+            Subtype = "server.down",
+            Severity = Severity.Down,
+            Title = "Server down",
+            OpenedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            Status = IncidentStatus.Open
+        });
+        await db.SaveChangesAsync();
+
+        var monitor = scope.ServiceProvider.GetRequiredService<ServerHealthMonitor>();
+        await monitor.CheckOnceAsync(default);
+
+        var incidents = await db.Incidents.IgnoreQueryFilters()
+            .Where(i => i.ServerId == server.Id && i.Status != IncidentStatus.Resolved)
+            .ToListAsync();
+
+        var only = Assert.Single(incidents);
+        Assert.Equal("server.down", only.Subtype);
     }
 
     [Fact]

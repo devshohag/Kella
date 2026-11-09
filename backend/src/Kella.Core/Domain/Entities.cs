@@ -116,6 +116,8 @@ public sealed class Incident : Entity, IOrgScoped
     public Guid? TenantId { get; set; }
     public Guid? ServerId { get; set; }
     public required string Type { get; set; }
+    /// <summary>Exact rule/marker that opened the incident, e.g. <c>server.down</c> (SPEC §9).</summary>
+    public string? Subtype { get; set; }
     public Severity Severity { get; set; }
     public IncidentStatus Status { get; set; } = IncidentStatus.Open;
     public required string Title { get; set; }
